@@ -1,6 +1,8 @@
 \section{A DSL for UI generation}
 
-Inspired by \href{https://www.openui.com/}{OpenUI}, \href{https://gen-ui-lang.github.io/}{GenUI Lang}, \href{https://arxiv.org/pdf/2508.13610}{Reactive Semantics for User Interface Description Languages} we propose a type-safe DSL to generate interactive UI elements.\\
+Inspired by \href{https://www.openui.com/}{OpenUI}, \href{https://gen-ui-lang.github.io/}{GenUI Lang}, \href{https://arxiv.org/pdf/2508.13610}{Reactive Semantics for User Interface Description Languages} we propose a DSL to generate interactive UI elements.
+
+We will design and implement a small, typed, reactive UI language whose formal semantics model how user events update state and regenerate an abstract UI tree.
 
 \noindent This would require:
 \begin{itemize}
@@ -11,31 +13,48 @@ Inspired by \href{https://www.openui.com/}{OpenUI}, \href{https://gen-ui-lang.gi
     		\item Functions and scoping
     		\item State management at runtime
     	\end{itemize}
-    \item Predefined types for common UI elements
+    \item A type systems, including predefined types for common UI elements
     \item The implementation will be done in OCAML
     \item If time allows, we aim for a proof-of-concept covering the complete flow of user prompt $\rightarrow$ UI code generation by LLM $\rightarrow$ UI rendering in the browser.
 \end{itemize}
 
-Our goal is to create a DSL to compactly and securely describe reactive UI elements in HTML that can be dispatched through multiple different runtimes. The language will include constructs that aren't strictly declerative (loops, variables, functions, ect.) and a type system including some predefined UI elements. The LLM part of the design serves as a constraint for direction: a compact language allows lower token consumption, and clear error messages reduce generation retries.
+Our goal is to create a DSL to compactly and securely describe reactive UI elements in HTML that can be dispatched through multiple different runtimes - assuming the backends are implemented for the targeted language. The language will include constructs that aren't strictly declerative (loops, variables, functions, ect.) and a type system including some predefined UI elements. The LLM part of the design serves as a constraint for direction: a compact language allows lower token consumption, and clear error messages reduce generation retries.
 
-An example program would look as such:
+The interpreter for the DSL will be written in OCaml and will, for this project's scope, be compiled to either JavaScript or WebAssembly depending on which is the easiest. \newline
+
+\noindent An example program would look as such:
 \begin{center}
 	\begin{lstlisting}
 		fn indexed_card(idx)  {
 			card {
-				text: "Counter: " ++ idx
+				text: "Counter: " :: idx
 			}
 		}
 		
-		i := 5
+		i := 1
 		row {
 			button {
-				click: i++
+				text: "Click me"
+				click: i += 1
 			}
 			indexed_card(i)
 		}
 	\end{lstlisting}
 \end{center}
+
+Which would, if the target language was HTML, output:
+\begin{center}
+	\begin{lstlisting}[language=html]
+		<div>
+			<button onclick="dispatchClick">Click me!</button>
+			<div class="card">
+				Counter: 1
+			</div>
+		</div>
+	\end{lstlisting}
+\end{center}
+
+The update to the \lstinline|1| present in the HTML would happen in our interpreter and not directly in JavaScript.
 
 The core mathematical elements of the project will be the definition of the language semantics which can be used to prove properties about the program state (e.g. safety and liveness) and the type system to statically detect errors.
 
@@ -54,5 +73,3 @@ Only simple data types (e.g. integers and strings) will need to be stored by the
 Our system will use OCaml libraries for parsing.
 
 Unit tests and proofs regarding compiler semantics will be used for testing.
-
-
