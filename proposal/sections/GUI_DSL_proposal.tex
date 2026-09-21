@@ -1,6 +1,6 @@
 \section{A DSL for UI generation}
 
-Inspired by \href{https://www.openui.com/}{OpenUI}, \href{https://gen-ui-lang.github.io/}{GenUI Lang}, \href{https://arxiv.org/pdf/2508.13610}{Reactive Semantics for User Interface Description Languages} we propose a DSL to generate interactive UI elements.\\
+Inspired by \href{https://www.openui.com/}{OpenUI}, \href{https://gen-ui-lang.github.io/}{GenUI Lang}, \href{https://arxiv.org/pdf/2508.13610}{Reactive Semantics for User Interface Description Languages} we propose a type-safe DSL to generate interactive UI elements.\\
 
 \noindent This would require:
 \begin{itemize}
@@ -11,11 +11,12 @@ Inspired by \href{https://www.openui.com/}{OpenUI}, \href{https://gen-ui-lang.gi
     		\item Functions and scoping
     		\item State management at runtime
     	\end{itemize}
+    \item Predefined types for common UI elements
     \item The implementation will be done in OCAML
     \item If time allows, we aim for a proof-of-concept covering the complete flow of user prompt $\rightarrow$ UI code generation by LLM $\rightarrow$ UI rendering in the browser.
 \end{itemize}
 
-The overall goal is to create a DSL which would allow the programmer to write a UI in one language and dispatch it through multiple different runtimes. The LLM part of the design serves as a constraint for direction: a compact language allows lower token consumption.
+Our goal is to create a DSL to compactly and securely describe reactive UI elements in HTML that can be dispatched through multiple different runtimes. The language will include constructs that aren't strictly declerative (loops, variables, functions, ect.) and a type system including some predefined UI elements. The LLM part of the design serves as a constraint for direction: a compact language allows lower token consumption, and clear error messages reduce generation retries.
 
 An example program would look as such:
 \begin{center}
@@ -36,11 +37,22 @@ An example program would look as such:
 	\end{lstlisting}
 \end{center}
 
-The core elements of the project will be language design, language semantics definition, type system and program state semantics.
+The core mathematical elements of the project will be the definition of the language semantics which can be used to prove properties about the program state (e.g. safety and liveness) and the type system to statically detect errors.
 
 \section{Roadmap}
 \begin{enumerate}
-	\item \textbf{Language design}: by the first check-in, we should have the semantics and the proofs necessary to be able to start developing something.
+	\item \textbf{Language design}: by the first check-in, we should have the semantics and the proofs necessary to be able to start development.
 	\item \textbf{Reactive semantics and compiler implementation}: At the second check-in we should have the start of an implementation and also have the reactive semantics defined.
 	\item \textbf{Proofs done and implementation finalized}.
 \end{enumerate}
+
+\section{Preliminary design sketch}
+We will need to formally define the syntax and operational semantics of the DSL in order to create a parser and correctly compile the code. The type system will also have to be defined to allow for better error checking.
+
+Only simple data types (e.g. integers and strings) will need to be stored by the compiler for variables TODO: is this true if we allow custom types?
+
+Our system will use OCaml libraries for parsing.
+
+Unit tests and proofs regarding compiler semantics will be used for testing.
+
+
