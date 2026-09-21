@@ -5,9 +5,19 @@ Inspired by things like \href{https://www.openui.com/}{OpenUI} and \href{https:/
 \noindent This would require:
 \begin{itemize}
     \item Designing an imperative DSL which should have
+    	\begin{itemize}
+    		\item Control flow statements 
+    		\item Variables and assignments
+    		\item Functions and scoping
+    		\item State management at runtime
+    	\end{itemize}
     \item Implementing a compiler written in OCAML and running in the browser through WASM.
     \item Implementing actual UI elements in HTML.
     \item Having at least a proof-of-concept covering the complete flow of user prompt $\rightarrow$ UI code generation by LLM $\rightarrow$ UI rendering in the browser.
 \end{itemize}
 
 The overall goal is, as stated, to create a DSL which would allow the programmer to write a UI in one language and be able to dispatch it through multiple different runtimes. The LLM part of the design serves as a constraint for direction, as the language will need to be simple enough for fast generation.
+
+The core elements of the project remain language semantics definition and proof,  and the web + LLM integration, although important, mostly serve as a demo.
+
+The project engages with formal semantics as the DSL and its runtime will have to be properly defined and shown to behave as the design intends.
