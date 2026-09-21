@@ -1,6 +1,8 @@
 \section{A DSL for UI generation}
 
-Inspired by \href{https://www.openui.com/}{OpenUI}, \href{https://gen-ui-lang.github.io/}{GenUI Lang}, \href{https://arxiv.org/pdf/2508.13610}{Reactive Semantics for User Interface Description Languages} we propose a DSL to generate interactive UI elements.\\
+Inspired by \href{https://www.openui.com/}{OpenUI}, \href{https://gen-ui-lang.github.io/}{GenUI Lang}, \href{https://arxiv.org/pdf/2508.13610}{Reactive Semantics for User Interface Description Languages} we propose a DSL to generate interactive UI elements.
+
+We will design and implement a small, typed, reactive UI language whose formal semantics model how user events update state and regenerate an abstract UI tree.
 
 \noindent This would require:
 \begin{itemize}
@@ -11,30 +13,45 @@ Inspired by \href{https://www.openui.com/}{OpenUI}, \href{https://gen-ui-lang.gi
     		\item Functions and scoping
     		\item State management at runtime
     	\end{itemize}
-    \item The implementation will be done in OCAML
+    \item The implementation will be done in OCaml
     \item If time allows, we aim for a proof-of-concept covering the complete flow of user prompt $\rightarrow$ UI code generation by LLM $\rightarrow$ UI rendering in the browser.
 \end{itemize}
 
-The overall goal is to create a DSL which would allow the programmer to write a UI in one language and dispatch it through multiple different runtimes. The LLM part of the design serves as a constraint for direction: a compact language allows lower token consumption.
+The extended stretch goal is to create a DSL which would allow the programmer to write a UI in one language and dispatch it through multiple different runtimes - assuming the backends are implemented for the targeted language. The LLM part of the design serves as a constraint for direction: a compact language allows lower token consumption.\newline
 
 An example program would look as such:
 \begin{center}
 	\begin{lstlisting}
 		fn indexed_card(idx)  {
 			card {
-				text: "Counter: " ++ idx
+				text: "Counter: " :: idx
 			}
 		}
 		
-		i := 5
+		i := 1
 		row {
 			button {
-				click: i++
+				text: "Click me"
+				click: i += 1
 			}
 			indexed_card(i)
 		}
 	\end{lstlisting}
 \end{center}
+
+Which would, if the target language was HTML, output:
+\begin{center}
+	\begin{lstlisting}[language=html]
+		<div>
+			<button onclick="dispatchClick">Click me!</button>
+			<div class="card">
+				Counter: 1
+			</div>
+		</div>
+	\end{lstlisting}
+\end{center}
+
+The update to the \lstinline|1| present in the HTML would happen in our interpreter and not directly in JavaScript.
 
 The core elements of the project will be language design, language semantics definition, type system and program state semantics.
 
