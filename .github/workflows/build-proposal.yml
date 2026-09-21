@@ -1,0 +1,34 @@
+name: Build proposal PDF
+
+on:
+  push:
+    paths:
+      - "proposal/**"
+      - ".github/workflows/build-proposal.yml"
+  pull_request:
+    paths:
+      - "proposal/**"
+      - ".github/workflows/build-proposal.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Compile LaTeX
+        uses: xu-cheng/latex-action@v4
+        with:
+          root_file: proposal/main.tex
+          work_in_root_file_dir: true
+
+      - name: Upload PDF
+        uses: actions/upload-artifact@v7
+        with:
+          name: proposal-pdf
+          path: proposal/main.pdf
