@@ -18,9 +18,7 @@ We will design and implement a small, typed, reactive UI language whose formal s
     \item If time allows, we aim for a proof-of-concept covering the complete flow of user prompt $\rightarrow$ UI code generation by LLM $\rightarrow$ UI rendering in the browser.
 \end{itemize}
 
-Our goal is to create a DSL to compactly and securely describe reactive UI elements in HTML that can be dispatched through multiple different runtimes - assuming the backends are implemented for the targeted language. The language will include constructs that aren't strictly declerative (loops, variables, functions, ect.) and a type system including some predefined UI elements. The LLM part of the design serves as a constraint for direction: a compact language allows lower token consumption, and clear error messages reduce generation retries.
-
-The interpreter for the DSL will be written in OCaml and will, for this project's scope, be compiled to either JavaScript or WebAssembly depending on which is the easiest. \newline
+Our goal is to create a DSL to compactly and securely describe reactive UI elements in HTML that can be dispatched through multiple different runtimes - assuming the backends are implemented for the targeted language. The language will include constructs that aren't strictly declerative (loops, variables, functions, ect.) and a type system including some predefined UI elements. The LLM part of the design serves as a constraint for direction: a compact language allows lower token consumption, and clear error messages reduce generation retries. The interpreter for the DSL will be written in OCaml and will, for this project's scope, be compiled to either JavaScript or WebAssembly depending on which is the easiest. \newline
 
 \noindent An example program would look as such:
 \begin{center}
