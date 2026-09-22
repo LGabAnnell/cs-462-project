@@ -68,8 +68,8 @@ The core mathematical elements of the project will be the definition of the lang
 \section{Preliminary design sketch}
 We will need to formally define the syntax and operational semantics of the DSL in order to create a parser and correctly compile the code. The type system will also have to be defined to allow for better error checking.
 
-Only simple data types (e.g. integers and strings) will need to be stored by the compiler for variables TODO: is this true if we allow custom types?
-
-Our system will use OCaml libraries for parsing.
-
-Unit tests and proofs regarding compiler semantics will be used for testing.
+\begin{itemize}
+	\item The language should be able to store numbers, strings and simple objects.
+	\item We will use OCaml libraries for parsing.
+	\item Unit tests and proofs regarding compiler semantics will be used for testing.
+\end{itemize}
