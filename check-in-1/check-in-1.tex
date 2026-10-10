@@ -1,0 +1,108 @@
+\documentclass{article}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage[backend=biber]{biblatex}
+\lstset{literate={°}{{\textdegree}}1}
+\lstset{tabsize=2, keepspaces=true}
+\addbibresource{biblio.bib}
+
+\title{Programming Language Foundations \\ A DSL for UI generation}
+\author{
+	Gabriel Annell - 404 998\\
+	\small{\textit{lars.annellrydenvald@epfl.ch}}
+	\and
+	Alex Bastianini - 434 990\\
+	\small{\textit{alex.bastianini@epfl.ch}}
+}
+
+\begin{document}
+	
+\maketitle
+\section{Language grammar (EBNF)}
+We use EBNF\cite{ISO14977} for the following grammar definition:
+\begin{lstlisting}
+(* Program *)
+program = { function_definition }, { expression } ;
+
+(* Functions *)
+function_definition = "fn", identifier, "(", [ identifier, { ",", identifier } ], ")", 
+	"{", { expression }, "}" ;
+
+function_call = identifier, "(", [ expression, { ",", expression } ], ")" ;
+
+(* Expressions *)
+expression = variable | integer | string | assignment 
+	| loop | function_call | component ;
+
+assignment = variable, ":=", expression ;
+
+loop = "repeat", ( variable | integer ),
+"{", { expression }, "}" ;
+
+(* UI Components *)
+component = component_type, "{", { ( component | property ) }, "}"  ;
+
+component_type = "card" | "button" | "text" | "column" | "row"  ;
+
+property = identifier, ":", expression ;
+
+(* Identifiers and Variables *)
+variable = identifier ;
+
+identifier = ? [a-zA-Z0-9]+ ? ;
+
+(* Primitive Types *)
+integer = ? [0-9]+ ? ;
+
+string = '"', { string_char | escape }, '"'  ;
+
+string_char = ? any Unicode character except " and \ ?  ;
+
+escape = "\", ( '"' | "\" | "n" | "t" )  ;
+\end{lstlisting}
+
+\section{Operational semantics}
+\subsection{Primitives}
+\[
+\frac{}
+{\langle \sigma, n\rangle \Downarrow \langle \sigma, n\rangle}
+\quad\textsc{Int}
+\]
+
+\[
+\frac{x\in\operatorname{dom}(\sigma)}
+{\langle \sigma, x\rangle \Downarrow \langle \sigma, \sigma(x)\rangle}
+\quad\textsc{Var}
+\]
+
+\[
+\frac{
+	\langle \sigma,e\rangle \Downarrow \langle \sigma_1,v\rangle
+}{
+	\langle \sigma, x := e\rangle
+	\Downarrow
+	\langle \sigma_1[x\mapsto v],\mathrm{unit}\rangle
+}
+\quad\textsc{Assign}
+\]
+
+\[
+\frac{
+	\langle \sigma,e_1\rangle\Downarrow\langle \sigma_1,v_1\rangle
+	\qquad
+	\langle \sigma_1,e_2\rangle\Downarrow\langle \sigma_2,v_2\rangle
+}{
+	\langle \sigma,e_1;e_2\rangle
+	\Downarrow\langle \sigma_2,v_2\rangle
+}
+\quad\textsc{Seq}
+\]
+
+
+\printbibliography
+
+\end{document}
