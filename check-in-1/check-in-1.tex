@@ -164,9 +164,18 @@ and $e_f$ denotes function body.
 
 \section{Type system - TODO}
 
-\section{Reactive semantics - TODO}
+We will define types that enforce that dynamic behaviour is lifted into a special type (\textsc{Signal}).
 
-Relevant papers:  Flapjax\cite{meyerovich:flapjax} and Embedding Dynamic Dataflow in a Call-by-Value Language\cite{10.1007/11693024_20}
+\section{Reactive semantics and Proofs - TODO}
+
+Relevant papers:  Flapjax\cite{meyerovich:flapjax} and Embedding Dynamic Dataflow in a Call-by-Value Language\cite{10.1007/11693024_20}\\
+
+Following the results these papers, our goal is to implement a \textit{push-driven} dataflow evaluation by maintaining a \textit{reactive dependency graph} $ G $ to manage signal propagation from sources to sinks.\\
+
+Initially our sources will only include events input manually from a CLI. These will be parsed by the OCaml interpreter and, if necessary, a new block of HTML will be output.\\
+
+\subsection{Proofs}
+We aim to prove \textbf{Glitch-Freedom}: for any topologically sorted evaluation of $ G $ we have that $ \forall v \in V $ the node $ v $ is evaluated at most once. This guarantees that no intermediate inconsistent states are made visible to the user.
 
 \section{Project progression}
 
