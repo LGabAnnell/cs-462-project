@@ -18,3 +18,5 @@
 *.xdv
 _minted-*/
 *.pdf
+*.glo
+*.idx

@@ -4,11 +4,13 @@ on:
   push:
     paths:
       - "proposal/**"
-      - ".github/workflows/build-proposal.yml"
+      - "check-in-1/**"
+      - ".github/workflows/build-docuemnts.yaml"
   pull_request:
     paths:
       - "proposal/**"
-      - ".github/workflows/build-proposal.yml"
+      - "check-in-1/**"
+      - ".github/workflows/build-documents.yaml"
 
 permissions:
   contents: read
@@ -27,8 +29,20 @@ jobs:
           root_file: proposal/main.tex
           work_in_root_file_dir: true
 
-      - name: Upload PDF
+      - name: Compile LaTeX
+        uses: xu-cheng/latex-action@v4
+        with:
+          root_file: check-in-1/check-in-1.tex
+          work_in_root_file_dir: true
+
+      - name: Upload proposal 
         uses: actions/upload-artifact@v7
         with:
           name: proposal-pdf
           path: proposal/main.pdf
+
+      - name: Upload check-in-1
+        uses: actions/upload-artifact@v7
+        with:
+          name: check-in-1-pdf
+          path: check-in-1/check-in-1.pdf
