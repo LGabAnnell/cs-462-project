@@ -5,12 +5,12 @@ on:
     paths:
       - "proposal/**"
       - "check-in-1/**"
-      - ".github/workflows/build-docuemnts.yml"
+      - ".github/workflows/build-docuemnts.yaml"
   pull_request:
     paths:
       - "proposal/**"
       - "check-in-1/**"
-      - ".github/workflows/build-documents.yml"
+      - ".github/workflows/build-documents.yaml"
 
 permissions:
   contents: read
