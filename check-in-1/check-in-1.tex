@@ -6,7 +6,7 @@
 \usepackage{listings}
 \usepackage{amsmath}
 \usepackage{amssymb}
-\usepackage[backend=biber]{biblatex}
+\usepackage[backend=biber, sorting=none]{biblatex}
 \lstset{literate={°}{{\textdegree}}1}
 \lstset{tabsize=2, keepspaces=true}
 \addbibresource{biblio.bib}
@@ -95,30 +95,30 @@ REM need to add function to configuration here
 \]
 
 \[
-  \frac{x\in\operatorname{dom}(\sigma)}
-  {\langle \sigma, x\rangle \Downarrow \langle \sigma, \sigma(x)\rangle}
+  \frac{v = \sigma(x)}
+  {\langle \sigma, x\rangle \Downarrow \langle \sigma, v\rangle}
   \quad\textsc{Var}
 \]
 
 \[
   \frac{
-    \langle \sigma,e\rangle \Downarrow \langle \sigma_1,v\rangle
+    \langle \sigma,e\rangle \Downarrow \langle \sigma',v\rangle
   }{
     \langle \sigma, x := e\rangle
     \Downarrow
-    \langle \sigma_1[x\mapsto v],\mathrm{unit}\rangle
+    \langle \sigma'[x\mapsto v]\rangle
   }
   \quad\textsc{Assign}
 \]
 \subsection{Sequence}
 \[
   \frac{
-    \langle \sigma,e_1\rangle\Downarrow\langle \sigma_1,v_1\rangle
+    \langle \sigma,e_1\rangle\Downarrow\langle \sigma',v_1\rangle
     \qquad
-    \langle \sigma_1,e_2\rangle\Downarrow\langle \sigma_2,v_2\rangle
+    \langle \sigma',e_2\rangle\Downarrow\langle \sigma'',v_2\rangle
   }{
     \langle \sigma,e_1;e_2\rangle
-    \Downarrow\langle \sigma_2,v_2\rangle
+    \Downarrow\langle \sigma'',v_2\rangle
   }
   \quad\textsc{Seq}
 \]
