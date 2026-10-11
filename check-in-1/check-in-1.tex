@@ -1,4 +1,3 @@
-
 \documentclass{article}
 \usepackage[margin=0.75in]{geometry}
 \usepackage{graphicx} % Required for inserting images
@@ -6,154 +5,176 @@
 \usepackage{listings}
 \usepackage{amsmath}
 \usepackage{amssymb}
-\usepackage[backend=biber, sorting=none]{biblatex}
+\usepackage[backend=biber,sorting=none]{biblatex}
 \lstset{literate={°}{{\textdegree}}1}
-\lstset{tabsize=2, keepspaces=true}
+\lstset{tabsize=2,keepspaces=true}
 \addbibresource{biblio.bib}
 
-\title{Programming Language Foundations \\ A DSL for UI generation}
+\title{
+  Programming Language Foundations \\
+  A DSL for UI generation
+}
 \author{
   Gabriel Annell - 404 998\\
-  \small{\textit{lars.annellrydenvald@epfl.ch}}
-  \and
-  Alex Bastianini - 434 990\\
+  \small{\textit{lars.annellrydenvald@epfl.ch}} \and Alex Bastianini - 434 990\\
   \small{\textit{alex.bastianini@epfl.ch}}
 }
 
 \begin{document}
 
 \maketitle
+\tableofcontents
+
 \section{Language grammar (EBNF)}
+
 We use EBNF\cite{ISO14977} for the following grammar definition:
-  \begin{lstlisting}
-    (* Program *)
-    program = { function_definition }, { expression } ;
+\begin{lstlisting}
+(* Program *)
+program = { function_definition }, { expression } ;
 
-    (* Functions *)
-    function_definition = "fn", identifier, "(", [ identifier, { ",", identifier } ], ")",
-    "{", { expression }, "}" ;
+(* Functions *)
+function_definition = "fn", identifier, "(", [ identifier, { ",", identifier } ], ")",
+"{", { expression }, "}" ;
 
-    function_call = identifier, "(", [ expression, { ",", expression } ], ")" ;
+function_call = identifier, "(", [ expression, { ",", expression } ], ")" ;
 
-    (* Expressions *)
-    expression = variable | integer | string | assignment
-    | loop | function_call | component ;
+(* Expressions *)
+expression = variable | integer | string | assignment
+| loop | function_call | component ;
 
-    assignment = variable, ":=", expression ;
+assignment = variable, ":=", expression ;
 
-    loop = "repeat", ( variable | integer ),
-    "{", { expression }, "}" ;
+loop = "repeat", ( variable | integer ),
+"{", { expression }, "}" ;
 
-    (* UI Components *)
-    component = component_type, "{", { ( component | property ) }, "}"  ;
+(* UI Components *)
+component = component_type, "{", { ( component | property ) }, "}"  ;
 
-    component_type = "card" | "button" | "text" | "column" | "row"  ;
+component_type = "card" | "button" | "text" | "column" | "row"  ;
 
-    property = identifier, ":", expression ;
+property = identifier, ":", expression ;
 
-    (* Identifiers and Variables *)
-    variable = identifier ;
+(* Identifiers and Variables *)
+variable = identifier ;
 
-    identifier = ? [a-zA-Z0-9]+ ? ;
+identifier = ? [a-zA-Z0-9]+ ? ;
 
-    (* Primitive Types *)
-    integer = ? [0-9]+ ? ;
+(* Primitive Types *)
+integer = ? [0-9]+ ? ;
 
-    string = '"', { string_char | escape }, '"'  ;
+string = '"', { string_char | escape }, '"'  ;
 
-    string_char = ? any Unicode character except " and \ ?  ;
+string_char = ? any Unicode character except " and \ ?  ;
 
-    escape = "\", ( '"' | "\" | "n" | "t" )  ;
-  \end{lstlisting}
+escape = "\", ( '"' | "\" | "n" | "t" )  ;
+\end{lstlisting}
 
 \section{Operational semantics}
+
 We define the semantic relations as
 
 \[
-  Functions \times Store \times Expr \rightharpoonup Functions \times
-  Store \times UI
+  Functions \times Store \times Expr \rightharpoonup Functions \times Store \times UI
 \]
 
 \noindent with
 
 \[
   \begin{gathered}
-    \phi \in Functions\\
-    \sigma \in Store\\
+    \phi \in Functions \\
+    \sigma \in Store   \\
     e \in Expr
   \end{gathered}
 \]
 
-\noindent REM $UI$ still needs to be defined more precisely.
+\noindent and $UI = Integer \times String \times Node $. $Node$ still needs to be defined more precisely.
 
 \subsection{Primitives}
-REM need to add function to configuration here
+
+For primitives, the $Function$ relation is omitted; hence no $\phi$ in the
+following configurations.
 \[
   \frac{}
-  {\langle \sigma, n\rangle \Downarrow \langle \sigma, n\rangle}
-  \quad\textsc{Int}
+  {\langle \sigma, n\rangle \Downarrow \langle \sigma, n\rangle} \quad\textsc{Int}
 \]
 
 \[
   \frac{v = \sigma(x)}
-  {\langle \sigma, x\rangle \Downarrow \langle \sigma, v\rangle}
-  \quad\textsc{Var}
+  {\langle \sigma, x\rangle \Downarrow \langle \sigma, v\rangle} \quad\textsc{Var}
 \]
 
 \[
-  \frac{
-    \langle \sigma,e\rangle \Downarrow \langle \sigma',v\rangle
-  }{
-    \langle \sigma, x := e\rangle
-    \Downarrow
-    \langle \sigma'[x\mapsto v]\rangle
-  }
-  \quad\textsc{Assign}
+	\frac{}{
+		\langle \sigma, s \rangle \Downarrow \langle \sigma, v \rangle
+	}\quad \textsc{Str}
 \]
+
+\subsection{Assignment}
+
+\[
+  \frac{
+  		\langle \phi, \sigma, e \rangle \Downarrow \langle \phi, \sigma', v \rangle
+  	} {
+  	\langle \phi, \sigma, x := e\rangle \Downarrow \langle\phi, \sigma'[x \mapsto v]\rangle} \quad\textsc{Assign}
+\]
+
 \subsection{Sequence}
+
 \[
-  \frac{
-    \langle \sigma,e_1\rangle\Downarrow\langle \sigma',v_1\rangle
-    \qquad
-    \langle \sigma',e_2\rangle\Downarrow\langle \sigma'',v_2\rangle
-  }{
-    \langle \sigma,e_1;e_2\rangle
-    \Downarrow\langle \sigma'',v_2\rangle
+  \frac{\langle \phi, \sigma, e_1 \rangle 
+  		\Downarrow 
+  		\langle \phi, \sigma',v_1\rangle 
+  		\qquad 
+  		\langle \phi, \sigma', e_2 \rangle 
+  		\Downarrow 
+  		\langle \phi, \sigma'', v_2 \rangle
   }
-  \quad\textsc{Seq}
-\]
-\subsection{Functions \cite[Section~8.1]{hong2023programming}}
-Here, $f$ defines \textit{function name}, $x_1, ..., x_n$ are
-function arguments and $e_f$ denotes function body.
-\subsubsection{Function definition}
-\[
-  \frac{}{
-    \langle
-    \phi,\operatorname{fn}\ f(x_1,\ldots,x_n)\{e_f\}
-    \rangle
-    \Downarrow
-    \phi[f\mapsto((x_1,\ldots,x_n),e_f)]
-  }
-  \quad\textsc{Def}
-\]
-\subsubsection{Function call}
-\[
-  \frac{
-    \begin{gathered}
-      \phi(f)=(x_1,\ldots,x_n,e_f)
-      \quad
-      \langle\sigma,e_i\rangle\Downarrow\langle\sigma',v_i\rangle
-      \quad
-      \langle\phi, \sigma,e_f[v_1/x_1,\ldots,v_n/x_n]\rangle
-      \Downarrow\langle\sigma',v\rangle
-    \end{gathered}
-  }{
-    \langle\phi,\sigma,f(e_1,\ldots,e_n)\rangle
-    \Downarrow\langle\phi,\sigma',v\rangle
-  }
-  \quad\textsc{Call}
+  {
+  	\langle  \phi, \sigma, e_1; e_2  \rangle 
+  	\Downarrow 
+  	\langle \phi, \sigma'',v_2\rangle
+  } 
+  \quad
+  \textsc{Seq}
 \]
 
+\subsection{Functions \cite[Section~8.1]{hong2023programming}}
+
+Here, $f$ defines \textit{function name}, $x_1, ..., x_n$ are function arguments
+and $e_f$ denotes function body.
+
+\subsubsection{Function definition}
+
+\[
+  \frac{}{\langle \phi,\operatorname{fn}\ f(x_1,\ldots,x_n)\{e_f\} \rangle \Downarrow \phi[f\mapsto((x_1,\ldots,x_n),e_f)]} \quad\textsc{Def}
+\]
+
+\subsubsection{Function call}
+
+\[
+  \frac{\begin{gathered}
+          \phi(f)
+          =          (x_1,\ldots,x_n,e_f) \quad \langle\sigma,e_i\rangle
+          \Downarrow \langle\sigma',v_i\rangle \quad \langle\phi, \sigma,e_f[v_1/x_1,\ldots,v_n/x_n]\rangle
+          \Downarrow \langle\sigma',v\rangle
+        \end{gathered}}{\langle\phi,\sigma,f(e_1,\ldots,e_n)\rangle \Downarrow \langle\phi,\sigma',v\rangle} \quad\textsc{Call}
+\]
+
+\subsection{Objects and properties - TODO}
+
+\section{Type system - TODO}
+
+\section{Reactive semantics - TODO}
+
+Relevant papers:  Flapjax\cite{meyerovich:flapjax} and Embedding Dynamic Dataflow in a Call-by-Value Language\cite{10.1007/11693024_20}
+
+\section{Project progression}
+
+In this first iteration, we have not achieved much as it fell to the back of the list of things we had to do. We still need to define the sections marked as TODO. A bit more research is needed as well. But all in all 
+
+\subsubsection*{Generative AI disclosure}
+
+Generative AI was used for research, \LaTeX \space commands and trying to make sure what is written is sane.
 \printbibliography
 
 \end{document}
