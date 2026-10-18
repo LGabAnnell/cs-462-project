@@ -30,36 +30,32 @@
 We use EBNF\cite{ISO14977} for the following grammar definition:
 \begin{lstlisting}
 (* Program *)
-program = { function_definition }, { expression } ;
+program = { declaration }, "render", expression
 
-(* Functions *)
-function_definition = "fn", identifier, "(", [ identifier, { ",", identifier } ], ")",
-"{", { expression }, "}" ;
-
-function_call = identifier, "(", [ expression, { ",", expression } ], ")" ;
+(* Declarations *)
+declaration = "let", identifier, [":", type], "=", expression
+            | "event", identifier, ":", type
 
 (* Expressions *)
-expression = variable | integer | string | assignment
-| loop | function_call | component ;
+expression = literal | identifier | lambda | expression expression
+            | "let", ident, "=", expression, "in", expression
+            | "if" expression, "then", expression, "else", expression
+            | expression binop expression
+            | "[", expression, {";", expression}, "]"
 
-assignment = variable, ":=", expression ;
+lambda = "fn", "(", identifier, ":", type, ")", "->", expression
 
-loop = "repeat", ( variable | integer ),
-"{", { expression }, "}" ;
+binop = "+" | "-" | "*" | "==" | "<" | "^"
 
-(* UI Components *)
-component = component_type, "{", { ( component | property ) }, "}"  ;
+literal = integer | "true" | "false" | string
 
-component_type = "card" | "button" | "text" | "column" | "row"  ;
+(* Types *)
+type = "Int" | "Bool" | "String" | "UI" | "Signal" type
+      | type "->" type | "(" type ")"
 
-property = identifier, ":", expression ;
-
-(* Identifiers and Variables *)
-variable = identifier ;
-
+(* Identifiers and Primitive Values *)
 identifier = ? [a-zA-Z0-9]+ ? ;
 
-(* Primitive Types *)
 integer = ? [0-9]+ ? ;
 
 string = '"', { string_char | escape }, '"'  ;
