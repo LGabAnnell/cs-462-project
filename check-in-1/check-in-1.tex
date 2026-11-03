@@ -10,6 +10,20 @@
 \lstset{tabsize=2,keepspaces=true}
 \addbibresource{biblio.bib}
 
+\newcommand{\kw}[1]{\mathsf{#1}}
+\newcommand{\none}{\kw{none}}
+\newcommand{\some}[1]{\kw{some}\ #1}
+\newcommand{\cfg}[3]{\langle #1,\ #2,\ #3\rangle}
+\newcommand{\step}{\longrightarrow}
+\newcommand{\cstep}{\mathrel{\longrightarrow_{c}}}
+\newcommand{\cstar}{\mathrel{\longrightarrow_{c}^{*}}}
+\newcommand{\ustep}{\hookrightarrow}
+\newcommand{\ustar}{\hookrightarrow^{*}}
+\newcommand{\dfrd}{\mathrm{dfrd}}
+\newcommand{\fire}{\sigma \in I \setminus \dfrd_S(I)}
+\newcommand{\cat}{\mathbin{+\!\!+}}
+\newcommand{\rul}[3]{\[\dfrac{\begin{array}{@{}c@{}}#2\end{array}}{\begin{array}{@{}c@{}}#3\end{array}}\ \textsc{#1}\]}
+
 \title{
   Programming Language Foundations \\
   A DSL for UI generation
@@ -27,39 +41,35 @@
 
 \section{Language grammar (EBNF)}
 
-We use EBNF\cite{ISO14977} for the following grammar definition:
+We use EBNF\cite{ISO14977} to define the grammar of our functional language.
 \begin{lstlisting}
 (* Program *)
-program = { function_definition }, { expression } ;
+program = { declaration }, "render", expression
 
-(* Functions *)
-function_definition = "fn", identifier, "(", [ identifier, { ",", identifier } ], ")",
-"{", { expression }, "}" ;
-
-function_call = identifier, "(", [ expression, { ",", expression } ], ")" ;
+(* Declarations *)
+declaration = "let", identifier, [":", type], "=", expression
+            | "event", identifier, ":", type
 
 (* Expressions *)
-expression = variable | integer | string | assignment
-| loop | function_call | component ;
+expression = literal | identifier | lambda | expression expression
+            | "let", identifier, [":", type], "=", expression, "in", expression
+            | "if" expression, "then", expression, "else", expression
+            | expression binop expression
+            | "[", expression, {";", expression}, "]"
 
-assignment = variable, ":=", expression ;
+lambda = "fn", "(", identifier, ":", type, ")", "->", expression
 
-loop = "repeat", ( variable | integer ),
-"{", { expression }, "}" ;
+binop = "+" | "-" | "*" | "==" | "<" | "^"
 
-(* UI Components *)
-component = component_type, "{", { ( component | property ) }, "}"  ;
+literal = integer | "true" | "false" | string | "()"
 
-component_type = "card" | "button" | "text" | "column" | "row"  ;
+(* Types *)
+type = "Int" | "Bool" | "String" | "UI" | "Unit" | "List", type 
+      | "Behaviour", type | "Event", type | type "->" type | "(" type ")"
 
-property = identifier, ":", expression ;
-
-(* Identifiers and Variables *)
-variable = identifier ;
-
+(* Identifiers and Primitive Values *)
 identifier = ? [a-zA-Z0-9]+ ? ;
 
-(* Primitive Types *)
 integer = ? [0-9]+ ? ;
 
 string = '"', { string_char | escape }, '"'  ;
@@ -69,102 +79,195 @@ string_char = ? any Unicode character except " and \ ?  ;
 escape = "\", ( '"' | "\" | "n" | "t" )  ;
 \end{lstlisting}
 
-\section{Operational semantics}
+\medskip
+\noindent The langage includes identifiers for functions that produce UI elements and combinators for treating signal types. We list these below with their type.
 
-We define the semantic relations as
+\begin{center}
+  \begin{tabular}{c | c}
+    Name & Type\\
+    \hline
+    \texttt{show} & \texttt{Int -> String}\\
+    \hline
+    \texttt{text} & \texttt{String -> UI}\\
+    \hline
+    \texttt{button} & \texttt{String -> Event Unit -> UI}\\
+    \hline
+    \texttt{column}, \texttt{row} & \texttt{List UI -> UI}\\
+    \hline
+    \texttt{dyn} & \texttt{Behaviour UI -> UI}\\
+    \hline
+    \texttt{map} & \texttt{('a -> 'b) -> Behaviour 'a -> Behaviour 'b}\\
+    \hline
+    \texttt{map2} & \texttt{('a -> 'b -> 'c) -> Behaviour 'a -> Behaviour 'b -> Behaviour 'c}\\
+    \hline
+    \texttt{mapE} & \texttt{('a -> 'b) -> Event 'a -> Event 'b}\\
+    \hline
+    \texttt{filterE} & \texttt{('a -> Bool) -> Event 'a -> Event 'a}\\
+    \hline
+    \texttt{mergeWith} & \texttt{('a -> 'a -> 'a) -> Event 'a -> Event 'a -> Event 'a}\\
+    \hline
+    \texttt{fold} & \texttt{'b -> ('b -> 'a -> 'b) -> Event 'a -> Behaviour 'b}\\
+    \hline
+    \texttt{hold} & \texttt{'a -> Event 'a -> Behaviour 'a}\\
+    \hline
+    \texttt{snapshot} & \texttt{('a -> 'b -> 'c) -> Event 'a -> Behaviour 'b -> Event 'c}\\
+\end{tabular}
+\end{center}
 
-\[
-  Functions \times Store \times Expr \rightharpoonup Functions \times Store \times UI
-\]
+The meta-variables \texttt{'a} are used as a placeholder to iterate over all possible types. In the langauge there is no polymorphism.
 
-\noindent with
+\section{Semantics}
+The language's behaviour can be divided into distinct layers, which we'll describe using different semantics that share domains and functions listed below:
 
-\[
-  \begin{gathered}
-    \phi \in Functions \\
-    \sigma \in Store   \\
-    e \in Expr
-  \end{gathered}
-\]
+\paragraph{Semantic domains.}
+\begin{align*}
+\sigma &\in \mathit{Loc} && \text{store locations, one per node of the graph}\\
+  \Sigma & \subset \mathit{Loc} &&\\
+o &\in \mathit{Occ} ::= \none \mid \some{v} && \text{contents of an event node}\\
+k &\in \mathit{Kind} && \text{node kinds, see below}\\
+S &: \mathit{Loc} \rightharpoonup (\mathit{Val} \cup \mathit{Occ} \cup \{\bot\}) \times \mathit{Kind} \times 2^{\mathit{Loc}} && \text{store: (contents, kind, dependents)}\\
+I &\subseteq \mathit{Loc} && \text{dirty set: nodes waiting to be recomputed}\\
+\varepsilon(t) &: \mathit{Loc} \rightharpoonup \mathit{Val} && \text{occurrences fired by the environment at tick } t
+\end{align*}
+Graph node kinds fall into two classes, which matches the \texttt{Behaviour}/\texttt{Event} split of the type system:
+\begin{align*}
+\text{behaviour kinds:}\quad & (\kw{map}\ f\ \sigma) \mid (\kw{map2}\ f\ \sigma\ \sigma) \mid (\kw{fold}\ f\ \sigma) \mid (\kw{hold}\ \sigma)\\
+\text{event kinds:}\quad & (\kw{src}\ x) \mid (\kw{mapE}\ f\ \sigma) \mid (\kw{filterE}\ f\ \sigma) \mid (\kw{mergeWith}\ f\ \sigma\ \sigma) \mid (\kw{snapshot}\ f\ \sigma\ \sigma)
+\end{align*}
+where the $\sigma$'s are the parents of the node. A behaviour node stores a plain value that persists from tick to tick, while an event node stores an occurrence that is only meaningful for the current tick. The name $x$ of a source is the name declared by \texttt{event x : T}, and is used by the CLI and by \texttt{button}.
 
-\noindent and $UI = Integer \times String \times Node $. $Node$ still needs to be defined more precisely.
+\paragraph{Useful functions.}
+\begin{align*}
+V_S(\sigma) &= c \quad\text{where } S(\sigma) = (c,\_,\_) && \text{current contents}\\
+S[\sigma \leftarrow c] &= S[\sigma \mapsto (c,k,\Sigma)] \quad\text{where } S(\sigma) = (\_,k,\Sigma) && \text{replace contents only}\\
+\mathrm{reg}(\sigma,P,S) &= S[\sigma' \mapsto (c,k,\Sigma' \cup \{\sigma\})]\ \ \forall \sigma' \in P \mid S(\sigma') = (c,k,\Sigma') && \text{register $\sigma$ as dependent of $P$}\\
+D_S(P) &= \textstyle\bigcup_{\sigma' \in P} \Sigma' \quad\text{where } S(\sigma') = (\_,\_,\Sigma') && \text{direct dependents}\\
+\dfrd_S(I) &= D_S^{+}(I) && \text{nodes downstream of a dirty node}\\
+A_{\mathrm{b}}(\Sigma,c_0,c) &= \begin{cases}\Sigma & c \neq c_0\\ \emptyset & \text{otherwise}\end{cases} && \text{behaviours: propagate on change}\\
+A_{\mathrm{e}}(\Sigma,o) &= \begin{cases}\Sigma & o = \some{\_}\\ \emptyset & o = \none\end{cases} && \text{events: propagate on presence}\\
+\mathrm{clear}(S) &= S[\sigma \leftarrow \none]\ \ \forall \sigma \text{ with an event kind} && \text{forget last tick's occurrences}\\
+\mathrm{inject}(S,\varepsilon_t) &= S[\sigma \leftarrow \some{v}]\ \ \forall (\sigma,v) \in \varepsilon_t && \text{insert the environment's occurrences}\\
+\mathrm{merge}(f,o_1,o_2) &= \begin{cases}\some{v} & o_1 = \some{a},\ o_2 = \some{b},\ f\ a\ b \cstar v\\ \some{a} & o_1 = \some{a},\ o_2 = \none\\ \some{b} & o_1 = \none,\ o_2 = \some{b}\\ \none & o_1 = o_2 = \none\end{cases}
+\end{align*}
 
-\subsection{Primitives}
+\subsection{Core $ \lambda $-calculus}
+The core of the language can be easily translated to an applied $ \lambda $-calculus with \texttt{if}, \texttt{let}, pure built-insand lists of expressions. We define a small-step CBV operational semantics for this subset.
 
-For primitives, the $Function$ relation is omitted; hence no $\phi$ in the
-following configurations.
-\[
-  \frac{}
-  {\langle \sigma, n\rangle \Downarrow \langle \sigma, n\rangle} \quad\textsc{Int}
-\]
 
-\[
-  \frac{v = \sigma(x)}
-  {\langle \sigma, x\rangle \Downarrow \langle \sigma, v\rangle} \quad\textsc{Var}
-\]
+\paragraph{Values, expressions and evaluation contexts.}
+Here $\oplus$ ranges over \texttt{binop} and $b$ over the built-ins, the latter are split into two groups:
+\begin{itemize}
+  \item the \emph{pure} ones, $\kw{show}$, $\kw{text}$, $\kw{button}$, $\kw{column}$, $\kw{row}$ and $\kw{dyn}$, handled by $\delta$ below;
+  \item the \emph{reactive} ones, $\kw{map}$, $\kw{map2}$, $\kw{mapE}$, $\kw{filterE}$, $\kw{mergeWith}$, $\kw{fold}$, $\kw{hold}$ and $\kw{snapshot}$, together with $\kw{source}_x$, handled by the graph construction rules.
+\end{itemize}
+\begin{align*}
+v &::= n \mid \kw{true} \mid \kw{false} \mid s \mid () \mid [v;\dots;v] \mid u \mid \sigma \mid \lambda(x{:}T).\,e\\
+u &::= \kw{text}\ s \mid \kw{button}\ s\ \sigma \mid \kw{column}\ [u;\dots;u] \mid \kw{row}\ [u;\dots;u] \mid \kw{dyn}\ \sigma\\
+e &::= v \mid x \mid e\ e \mid \kw{if}\ e\ \kw{then}\ e\ \kw{else}\ e \mid \kw{let}\ x = e\ \kw{in}\ e \mid e \oplus e \mid [e;\dots;e] \mid b\ e\cdots e \mid \kw{source}_x\\
+E &::= [\,] \mid E\ e \mid v\ E \mid \kw{if}\ E\ \kw{then}\ e\ \kw{else}\ e \mid \kw{let}\ x = E\ \kw{in}\ e \mid E \oplus e \mid v \oplus E\\
+  &\phantom{::=}\ \mid [v;\dots;v;E;e;\dots;e] \mid b\ v\cdots v\ E\ e\cdots e
+\end{align*}
 
-\[
-	\frac{}{
-		\langle \sigma, s \rangle \Downarrow \langle \sigma, v \rangle
-	}\quad \textsc{Str}
-\]
+\paragraph{Core reduction.} The following rules relate expressions, $e \cstep e'$:
+\begin{align*}
+(\lambda(x{:}T).\,e)\ v &\cstep e[v/x] & &\textsc{($\beta_v$)}\\
+\kw{let}\ x = v\ \kw{in}\ e &\cstep e[v/x] & &\textsc{(Let)}\\
+\kw{if}\ \kw{true}\ \kw{then}\ e_1\ \kw{else}\ e_2 &\cstep e_1 & &\textsc{(If-T)}\\
+\kw{if}\ \kw{false}\ \kw{then}\ e_1\ \kw{else}\ e_2 &\cstep e_2 & &\textsc{(If-F)}\\
+v_1 \oplus v_2 &\cstep \delta(\oplus, v_1, v_2) & &\textsc{($\delta$-op)}\\
+b\ v_1\cdots v_n &\cstep \delta(b, v_1,\dots,v_n) \quad (b \text{ pure}) & &\textsc{($\delta$-prim)}
+\end{align*}
+where $\delta$ is the usual interpretation of the arithmetic, comparison and string operators and of the pure built-ins ($\delta(\kw{show},n)$ is the decimal string of $n$, $\delta(\kw{text},s) = \kw{text}\ s$, and so on). A core step can happen anywhere in an evaluation position, while the rest of the configuration is left untouched:
+\rul{(Ctx)}{e \cstep e'}{\cfg{S}{I}{E[e]} \step \cfg{S}{I}{E[e']}}
+We write $\cstar$ for the reflexive transitive closure of $\cstep$.
 
-\subsection{Assignment}
+\subsection{Graph construction}
 
-\[
-  \frac{
-  		\langle \phi, \sigma, e \rangle \Downarrow \langle \phi, \sigma', v \rangle
-  	} {
-  	\langle \phi, \sigma, x := e\rangle \Downarrow \langle\phi, \sigma'[x \mapsto v]\rangle} \quad\textsc{Assign}
-\]
+This extention to the core $ \lambda $-calculus constructs the dataflow graph when the program is first run. We use small-step operational semantics to describe this.
 
-\subsection{Sequence}
+\paragraph{Construction rules.}
+Configurations are $\cfg{S}{I}{e}$, and the core rules above are lifted to them by (Ctx). In each rule below $\sigma \notin \mathrm{dom}(S)$ is fresh, so every node's parents have strictly smaller locations than the node itself. This makes the graph acyclic by construction. Declarations are sequential, so a node can only refer to earlier ones. The declaration \texttt{event x : T} desugars to \texttt{let x = $\kw{source}_x$ in}\ldots
+\rul{(Src)}{S' = S[\sigma \mapsto (\none,(\kw{src}\ x),\emptyset)]}
+{\cfg{S}{I}{E[\kw{source}_x]} \step \cfg{S'}{I}{E[\sigma]}}
+\rul{(Map)}{S' = \mathrm{reg}(\sigma,\{\sigma_1\},\ S[\sigma \mapsto (\bot,(\kw{map}\ f\ \sigma_1),\emptyset)])}
+{\cfg{S}{I}{E[\kw{map}\ f\ \sigma_1]} \step \cfg{S'}{I \cup \{\sigma\}}{E[\sigma]}}
+\rul{(Map2)}{S' = \mathrm{reg}(\sigma,\{\sigma_1,\sigma_2\},\ S[\sigma \mapsto (\bot,(\kw{map2}\ f\ \sigma_1\ \sigma_2),\emptyset)])}
+{\cfg{S}{I}{E[\kw{map2}\ f\ \sigma_1\ \sigma_2]} \step \cfg{S'}{I \cup \{\sigma\}}{E[\sigma]}}
+\rul{(MapE)}{S' = \mathrm{reg}(\sigma,\{\sigma_1\},\ S[\sigma \mapsto (\none,(\kw{mapE}\ f\ \sigma_1),\emptyset)])}
+{\cfg{S}{I}{E[\kw{mapE}\ f\ \sigma_1]} \step \cfg{S'}{I}{E[\sigma]}}
+\rul{(FilterE)}{S' = \mathrm{reg}(\sigma,\{\sigma_1\},\ S[\sigma \mapsto (\none,(\kw{filterE}\ f\ \sigma_1),\emptyset)])}
+{\cfg{S}{I}{E[\kw{filterE}\ f\ \sigma_1]} \step \cfg{S'}{I}{E[\sigma]}}
+\rul{(MergeWith)}{S' = \mathrm{reg}(\sigma,\{\sigma_1,\sigma_2\},\ S[\sigma \mapsto (\none,(\kw{mergeWith}\ f\ \sigma_1\ \sigma_2),\emptyset)])}
+{\cfg{S}{I}{E[\kw{mergeWith}\ f\ \sigma_1\ \sigma_2]} \step \cfg{S'}{I}{E[\sigma]}}
+\rul{(Fold)}{S' = \mathrm{reg}(\sigma,\{\sigma_1\},\ S[\sigma \mapsto (z,(\kw{fold}\ f\ \sigma_1),\emptyset)])}
+{\cfg{S}{I}{E[\kw{fold}\ z\ f\ \sigma_1]} \step \cfg{S'}{I}{E[\sigma]}}
+\rul{(Hold)}{S' = \mathrm{reg}(\sigma,\{\sigma_1\},\ S[\sigma \mapsto (z,(\kw{hold}\ \sigma_1),\emptyset)])}
+{\cfg{S}{I}{E[\kw{hold}\ z\ \sigma_1]} \step \cfg{S'}{I}{E[\sigma]}}
+\rul{(Snapshot)}{S' = \mathrm{reg}(\sigma,\{\sigma_e,\sigma_b\},\ S[\sigma \mapsto (\none,(\kw{snapshot}\ f\ \sigma_e\ \sigma_b),\emptyset)])}
+{\cfg{S}{I}{E[\kw{snapshot}\ f\ \sigma_e\ \sigma_b]} \step \cfg{S'}{I}{E[\sigma]}}
+Only \textsc{Map} and \textsc{Map2} nodes are added to the dirty set at construction. They start at $\bot$ and are initialised by the update rules once their parents are ready, so construction never applies a user function. All other nodes have known initial contents: the initial value for $\kw{fold}$ and $\kw{hold}$, and $\none$ for events, since nothing has happened yet.
 
-\[
-  \frac{\langle \phi, \sigma, e_1 \rangle 
-  		\Downarrow 
-  		\langle \phi, \sigma',v_1\rangle 
-  		\qquad 
-  		\langle \phi, \sigma', e_2 \rangle 
-  		\Downarrow 
-  		\langle \phi, \sigma'', v_2 \rangle
-  }
-  {
-  	\langle  \phi, \sigma, e_1; e_2  \rangle 
-  	\Downarrow 
-  	\langle \phi, \sigma'',v_2\rangle
-  } 
-  \quad
-  \textsc{Seq}
-\]
+\subsection{Update rules}
 
-\subsection{Functions \cite[Section~8.1]{hong2023programming}}
+These rules describe how the store evolves in response to external events. A step is $\cfg{S}{I}{t} \ustep \cfg{S'}{I'}{t'}$, where $t$ is the current tick and $f \cdots \cstar v$ uses only the core reduction. A dirty node $\sigma$ may only be recomputed when no dirty node is upstream of it, i.e.\ $\fire$.
 
-Here, $f$ defines \textit{function name}, $x_1, ..., x_n$ are function arguments
-and $e_f$ denotes function body.
+\paragraph{Behaviour nodes.}
+\rul{(U-Map)}{\fire \qquad S(\sigma) = (c_0,(\kw{map}\ f\ \sigma_1),\Sigma) \qquad f\ V_S(\sigma_1) \cstar c}
+{\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow c]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{b}}(\Sigma,c_0,c)}{t}}
+\rul{(U-Map2)}{\fire \qquad S(\sigma) = (c_0,(\kw{map2}\ f\ \sigma_1\ \sigma_2),\Sigma) \qquad f\ V_S(\sigma_1)\ V_S(\sigma_2) \cstar c}
+{\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow c]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{b}}(\Sigma,c_0,c)}{t}}
+\rul{(U-Fold)}{\fire \qquad S(\sigma) = (a,(\kw{fold}\ f\ \sigma_1),\Sigma) \qquad V_S(\sigma_1) = \some{v} \qquad f\ a\ v \cstar a'}
+{\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow a']}{(I \setminus \{\sigma\}) \cup A_{\mathrm{b}}(\Sigma,a,a')}{t}}
+\rul{(U-Fold-Idle)}{\fire \qquad S(\sigma) = (a,(\kw{fold}\ f\ \sigma_1),\Sigma) \qquad V_S(\sigma_1) = \none}
+{\cfg{S}{I}{t} \ustep \cfg{S}{I \setminus \{\sigma\}}{t}}
+\rul{(U-Hold)}{\fire \qquad S(\sigma) = (a,(\kw{hold}\ \sigma_1),\Sigma) \qquad V_S(\sigma_1) = \some{v}}
+{\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow v]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{b}}(\Sigma,a,v)}{t}}
+\textsc{U-Hold-Idle} is the analogue of \textsc{U-Fold-Idle}: if the parent has no occurrence, $\sigma$ is simply removed from $I$ and keeps its value.
 
-\subsubsection{Function definition}
+\paragraph{Event nodes.}
+\rul{(U-MapE)}{\fire \qquad S(\sigma) = (\_,(\kw{mapE}\ f\ \sigma_1),\Sigma) \\ V_S(\sigma_1) = \some{v} \qquad f\ v \cstar v' \qquad o = \some{v'}}
+{\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
+\rul{(U-FilterE)}{\fire \qquad S(\sigma) = (\_,(\kw{filterE}\ f\ \sigma_1),\Sigma) \\ V_S(\sigma_1) = \some{v} \qquad f\ v \cstar b \\ o = \begin{cases}\some{v} & b = \kw{true}\\ \none & b = \kw{false}\end{cases}}
+{\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
+\rul{(U-Merge)}{\fire \qquad S(\sigma) = (\_,(\kw{mergeWith}\ f\ \sigma_1\ \sigma_2),\Sigma) \\ o = \mathrm{merge}(f,V_S(\sigma_1),V_S(\sigma_2))}
+{\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
+\rul{(U-Snapshot)}{\fire \qquad S(\sigma) = (\_,(\kw{snapshot}\ f\ \sigma_e\ \sigma_b),\Sigma) \\ o = \begin{cases}\some{v} & V_S(\sigma_e) = \some{a},\ f\ a\ V_S(\sigma_b) \cstar v\\ \none & \text{otherwise}\end{cases}}
+{\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
+\textsc{Snapshot} is registered on both parents so that the behaviour is up to date when the event is processed, but only an occurrence of the event produces an output: a tick in which only the behaviour changed yields $\none$.
 
-\[
-  \frac{}{\langle \phi,\operatorname{fn}\ f(x_1,\ldots,x_n)\{e_f\} \rangle \Downarrow \phi[f\mapsto((x_1,\ldots,x_n),e_f)]} \quad\textsc{Def}
-\]
+\paragraph{Time.}
+Time advances only when the system is stable, so when $I = \emptyset$. All events are then reset, the occurrences of the next tick are inserted into their sources, and the direct dependents of those sources become dirty:
+\rul{(U-Tick)}{F = \mathrm{dom}(\varepsilon(t+1)) \qquad S' = \mathrm{inject}(\mathrm{clear}(S),\ \varepsilon(t+1))}
+{\cfg{S}{\emptyset}{t} \ustep \cfg{S'}{D_S(F)}{t+1}}
 
-\subsubsection{Function call}
+\subsection{Programs and Rendering}
 
-\[
-  \frac{\begin{gathered}
-          \phi(f)
-          =          (x_1,\ldots,x_n,e_f) \quad \langle\sigma,e_i\rangle
-          \Downarrow \langle\sigma',v_i\rangle \quad \langle\phi, \sigma,e_f[v_1/x_1,\ldots,v_n/x_n]\rangle
-          \Downarrow \langle\sigma',v\rangle
-        \end{gathered}}{\langle\phi,\sigma,f(e_1,\ldots,e_n)\rangle \Downarrow \langle\phi,\sigma',v\rangle} \quad\textsc{Call}
-\]
+A \texttt{program} is simply syntactical sugar that evaluates as nested \texttt{let}s with \texttt{expression} at the end, whose final value is compiled to HTML using the rendering function, defined by recursion as
 
-\subsection{Objects and properties - TODO}
 
-\section{Type system - TODO}
+\begin{align*}
+R(S,\ \kw{text}\ s) &= \texttt{\textless span\textgreater}\cat \mathrm{esc}(s) \cat \texttt{\textless /span\textgreater}\\
+R(S,\ \kw{button}\ s\ \sigma) &= \texttt{\textless button data-on="}\cat x \cat \texttt{"\textgreater}\cat \mathrm{esc}(s) \cat \texttt{\textless /button\textgreater}\\ &\qquad\text{where } S(\sigma) = (\_,(\kw{src}\ x),\_)\\
+R(S,\ \kw{column}\ [u_1;\dots;u_n]) &= \texttt{\textless div class="column"\textgreater}\\ &\qquad\cat R(S,u_1) \cat \cdots \cat R(S,u_n) \cat \texttt{\textless /div\textgreater}\\
+R(S,\ \kw{row}\ [u_1;\dots;u_n]) &= \texttt{\textless div class="row"\textgreater}\\ &\qquad\cat R(S,u_1) \cat \cdots \cat R(S,u_n) \cat \texttt{\textless /div\textgreater}\\
+R(S,\ \kw{dyn}\ \sigma) &= R(S,\ V_S(\sigma))
+\end{align*}
+where $\mathrm{esc}$ escapes the HTML special characters, and the output is indented when printed. The final pipeline describing the run of a program is as follows:
 
-We will define types that enforce that dynamic behaviour is lifted into a special type (\textsc{Signal}).
+\begin{enumerate}
+  \item \textbf{Desugar} the program into a single expression $e_{\mathit{prog}}$: the declarations become nested \texttt{let}s ending in the \texttt{render} expression, and \texttt{event x : T} becomes \texttt{let x = $\kw{source}_x$ in}.
+  \item \textbf{Construct} the graph: $\cfg{\emptyset}{\emptyset}{e_{\mathit{prog}}} \step^{*} \cfg{S_0}{I_0}{u}$, where $u$ is a UI value. This runs once, and the graph never changes afterwards.
+  \item \textbf{Initialise}: $\cfg{S_0}{I_0}{0} \ustar \cfg{S_1}{\emptyset}{0}$, using every update rule except \textsc{U-Tick}. Print the frame $h_0 = R(S_1,u)$.
+  \item \textbf{For each tick}: parse the next CLI line into $\varepsilon(t+1)$, checking that every name is a declared source, every payload has the declared type, and no source appears twice. Then run
+  \[\cfg{S_t}{\emptyset}{t} \ustep \cfg{S'}{I'}{t+1} \ustar \cfg{S_{t+1}}{\emptyset}{t+1}\]
+  and compute $h_{t+1} = R(S_{t+1},u)$. Print it only if $h_{t+1} \neq h_t$.
+  \item \textbf{Repeat} until the end of the input. A malformed line is reported on standard error and leaves the state unchanged.
+\end{enumerate}
+The same $u$ is used for every frame: only the contents of the store change, and $\kw{dyn}$ nodes are the only places where the rendered text depends on them.
+
+\section{Type system}
+
+Based on simply-typed lambda calculus, it includes the types introduced in the syntax.
 
 \section{Reactive semantics and Proofs - TODO}
 
