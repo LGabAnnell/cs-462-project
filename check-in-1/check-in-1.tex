@@ -23,6 +23,7 @@
 \newcommand{\fire}{\sigma \in I \setminus \dfrd_S(I)}
 \newcommand{\cat}{\mathbin{+\!\!+}}
 \newcommand{\rul}[3]{\[\dfrac{\begin{array}{@{}c@{}}#2\end{array}}{\begin{array}{@{}c@{}}#3\end{array}}\ \textsc{#1}\]}
+\newcommand{\tj}{\Sigma;\Gamma \vdash}   % add to the preamble
 
 \title{
   Programming Language Foundations \\
@@ -151,7 +152,7 @@ A_{\mathrm{e}}(\Sigma,o) &= \begin{cases}\Sigma & o = \some{\_}\\ \emptyset & o 
 \end{align*}
 
 \subsection{Core $ \lambda $-calculus}
-The core of the language can be easily translated to an applied $ \lambda $-calculus with \texttt{if}, \texttt{let}, pure built-insand lists of expressions. We define a small-step CBV operational semantics for this subset.
+The core of the language can be easily translated to an applied $ \lambda $-calculus with \texttt{if}, \texttt{let}, pure built-ins and lists of expressions. We define a small-step CBV operational semantics for this subset.
 
 
 \paragraph{Values, expressions and evaluation contexts.}
@@ -163,7 +164,7 @@ Here $\oplus$ ranges over \texttt{binop} and $b$ over the built-ins, the latter 
 \begin{align*}
 v &::= n \mid \kw{true} \mid \kw{false} \mid s \mid () \mid [v;\dots;v] \mid u \mid \sigma \mid \lambda(x{:}T).\,e\\
 u &::= \kw{text}\ s \mid \kw{button}\ s\ \sigma \mid \kw{column}\ [u;\dots;u] \mid \kw{row}\ [u;\dots;u] \mid \kw{dyn}\ \sigma\\
-e &::= v \mid x \mid e\ e \mid \kw{if}\ e\ \kw{then}\ e\ \kw{else}\ e \mid \kw{let}\ x = e\ \kw{in}\ e \mid e \oplus e \mid [e;\dots;e] \mid b\ e\cdots e \mid \kw{source}_x\\
+e &::= v \mid x \mid e\ e \mid \kw{if}\ e\ \kw{then}\ e\ \kw{else}\ e \mid \kw{let}\ x = e\ \kw{in}\ e \mid e \oplus e \mid [e;\dots;e] \mid b\ e\cdots e\\
 E &::= [\,] \mid E\ e \mid v\ E \mid \kw{if}\ E\ \kw{then}\ e\ \kw{else}\ e \mid \kw{let}\ x = E\ \kw{in}\ e \mid E \oplus e \mid v \oplus E\\
   &\phantom{::=}\ \mid [v;\dots;v;E;e;\dots;e] \mid b\ v\cdots v\ E\ e\cdots e
 \end{align*}
@@ -186,9 +187,8 @@ We write $\cstar$ for the reflexive transitive closure of $\cstep$.
 This extention to the core $ \lambda $-calculus constructs the dataflow graph when the program is first run. We use small-step operational semantics to describe this.
 
 \paragraph{Construction rules.}
-Configurations are $\cfg{S}{I}{e}$, and the core rules above are lifted to them by (Ctx). In each rule below $\sigma \notin \mathrm{dom}(S)$ is fresh, so every node's parents have strictly smaller locations than the node itself. This makes the graph acyclic by construction. Declarations are sequential, so a node can only refer to earlier ones. The declaration \texttt{event x : T} desugars to \texttt{let x = $\kw{source}_x$ in}\ldots
-\rul{(Src)}{S' = S[\sigma \mapsto (\none,(\kw{src}\ x),\emptyset)]}
-{\cfg{S}{I}{E[\kw{source}_x]} \step \cfg{S'}{I}{E[\sigma]}}
+Configurations are $\cfg{S}{I}{e}$, and the core rules above are lifted to them by (Ctx). In each rule below $\sigma \notin \mathrm{dom}(S)$ is fresh, so every node's parents have strictly smaller locations than the node itself. This makes the graph acyclic by construction. Declarations are sequential, so a node can only refer to earlier ones.
+
 \rul{(Map)}{S' = \mathrm{reg}(\sigma,\{\sigma_1\},\ S[\sigma \mapsto (\bot,(\kw{map}\ f\ \sigma_1),\emptyset)])}
 {\cfg{S}{I}{E[\kw{map}\ f\ \sigma_1]} \step \cfg{S'}{I \cup \{\sigma\}}{E[\sigma]}}
 \rul{(Map2)}{S' = \mathrm{reg}(\sigma,\{\sigma_1,\sigma_2\},\ S[\sigma \mapsto (\bot,(\kw{map2}\ f\ \sigma_1\ \sigma_2),\emptyset)])}
@@ -255,7 +255,9 @@ R(S,\ \kw{dyn}\ \sigma) &= R(S,\ V_S(\sigma))
 where $\mathrm{esc}$ escapes the HTML special characters, and the output is indented when printed. The final pipeline describing the run of a program is as follows:
 
 \begin{enumerate}
-  \item \textbf{Desugar} the program into a single expression $e_{\mathit{prog}}$: the declarations become nested \texttt{let}s ending in the \texttt{render} expression, and \texttt{event x : T} becomes \texttt{let x = $\kw{source}_x$ in}.
+  \item \textbf{Desugar} the program into a single expression $e_{\mathit{prog}}$: the declarations become nested \texttt{let}s ending in the \texttt{render} expression, and the event declarations \texttt{event x : T} are collected to create the initial configuration as follows:
+\rul{(Init)}{S_0 = \{\sigma_i \mapsto (\none,(\kw{src}\ x_i),\emptyset)\}_{i=1..n} \qquad \sigma_i \text{ distinct}}
+{\mathrm{start}(e_{\mathit{prog}}) = \cfg{S_0}{\emptyset}{e_{\mathit{prog}}[\sigma_1/x_1]\cdots[\sigma_n/x_n]}}
   \item \textbf{Construct} the graph: $\cfg{\emptyset}{\emptyset}{e_{\mathit{prog}}} \step^{*} \cfg{S_0}{I_0}{u}$, where $u$ is a UI value. This runs once, and the graph never changes afterwards.
   \item \textbf{Initialise}: $\cfg{S_0}{I_0}{0} \ustar \cfg{S_1}{\emptyset}{0}$, using every update rule except \textsc{U-Tick}. Print the frame $h_0 = R(S_1,u)$.
   \item \textbf{For each tick}: parse the next CLI line into $\varepsilon(t+1)$, checking that every name is a declared source, every payload has the declared type, and no source appears twice. Then run
@@ -267,8 +269,67 @@ The same $u$ is used for every frame: only the contents of the store change, and
 
 \section{Type system}
 
-Based on simply-typed lambda calculus, it includes the types introduced in the syntax.
+Based on the simply-typed lambda calculus, extended with \texttt{Behaviour} and \texttt{Event}.
+The judgment is
+\[ \Sigma;\Gamma \vdash e : \tau \]
+where $\Gamma$ maps variables to types and $\Sigma$ maps store locations to node types.
+For a source program $\Sigma = \emptyset$, so a location $\sigma$ appearing in the input is a type error, so
+$\Sigma$ is only needed for the preservation proof.
 
+\paragraph{Types.} The metavariables $A, B, C$ range over \emph{plain} types, which cannot contain
+$\kw{Behaviour}$ or $\kw{Event}$. This guarantees that a function never allocates graph nodes while a tick is running.
+\begin{align*}
+A, B, C &::= \kw{Int} \mid \kw{Bool} \mid \kw{String} \mid \kw{Unit} \mid \kw{UI} \mid \kw{List}\ A \mid A \to B\\
+\tau &::= A \mid \kw{Behaviour}\ A \mid \kw{Event}\ A
+\end{align*}
+
+\paragraph{Variables, locations and literals.}
+\rul{(T-Lit)}{\ }{\tj n : \kw{Int} \qquad \tj \kw{true},\kw{false} : \kw{Bool} \qquad \tj s : \kw{String} \qquad \tj () : \kw{Unit}}
+\rul{(T-Var)}{\Gamma(x) = \tau}{\tj x : \tau}
+\rul{(T-Loc)}{\Sigma(\sigma) = \tau}{\tj \sigma : \tau}
+
+\paragraph{Functions, let, conditionals and lists.}
+\rul{(T-Lam)}{\Sigma;\Gamma, x{:}A \vdash e : B}{\tj \lambda(x{:}A).\,e : A \to B}
+\rul{(T-App)}{\tj e_1 : A \to B \qquad \tj e_2 : A}{\tj e_1\ e_2 : B}
+\rul{(T-Let)}{\tj e_1 : \tau_1 \qquad \Sigma;\Gamma, x{:}\tau_1 \vdash e_2 : \tau_2}{\tj \kw{let}\ x = e_1\ \kw{in}\ e_2 : \tau_2}
+\rul{(T-If)}{\tj e_c : \kw{Bool} \qquad \tj e_1 : \tau \qquad \tj e_2 : \tau}
+{\tj \kw{if}\ e_c\ \kw{then}\ e_1\ \kw{else}\ e_2 : \tau}
+\rul{(T-List)}{\tj e_i : A \quad (1 \le i \le n,\ n \ge 1)}{\tj [e_1;\dots;e_n] : \kw{List}\ A}
+
+\paragraph{Operators.}
+\rul{(T-Arith)}{\tj e_1 : \kw{Int} \qquad \tj e_2 : \kw{Int} \qquad \oplus \in \{+,-,*\}}{\tj e_1 \oplus e_2 : \kw{Int}}
+\rul{(T-Lt)}{\tj e_1 : \kw{Int} \qquad \tj e_2 : \kw{Int}}{\tj e_1 < e_2 : \kw{Bool}}
+\rul{(T-Eq)}{\tj e_1 : A \qquad \tj e_2 : A \qquad A \in \{\kw{Int},\kw{Bool},\kw{String}\}}{\tj e_1 == e_2 : \kw{Bool}}
+\rul{(T-Cat)}{\tj e_1 : \kw{String} \qquad \tj e_2 : \kw{String}}{\tj e_1 \mathbin{\hat{\ }} e_2 : \kw{String}}
+
+\paragraph{UI built-ins.} The UI values $u$ of the semantic syntax are saturated applications of these
+constructors, so the same rules type them at run time.
+\rul{(T-Show)}{\tj e : \kw{Int}}{\tj \kw{show}\ e : \kw{String}}
+\rul{(T-Text)}{\tj e : \kw{String}}{\tj \kw{text}\ e : \kw{UI}}
+\rul{(T-Button)}{\tj e_1 : \kw{String} \qquad \tj e_2 : \kw{Event}\ \kw{Unit}}{\tj \kw{button}\ e_1\ e_2 : \kw{UI}}
+\rul{(T-Column)}{\tj e : \kw{List}\ \kw{UI}}{\tj \kw{column}\ e : \kw{UI} \qquad \tj \kw{row}\ e : \kw{UI}}
+\rul{(T-Dyn)}{\tj e : \kw{Behaviour}\ \kw{UI}}{\tj \kw{dyn}\ e : \kw{UI}}
+
+\paragraph{Reactive built-ins.}
+\rul{(T-Map)}{\tj f : A \to B \qquad \tj e : \kw{Behaviour}\ A}{\tj \kw{map}\ f\ e : \kw{Behaviour}\ B}
+\rul{(T-Map2)}{\tj f : A \to B \to C \qquad \tj e_1 : \kw{Behaviour}\ A \qquad \tj e_2 : \kw{Behaviour}\ B}
+{\tj \kw{map2}\ f\ e_1\ e_2 : \kw{Behaviour}\ C}
+\rul{(T-MapE)}{\tj f : A \to B \qquad \tj e : \kw{Event}\ A}{\tj \kw{mapE}\ f\ e : \kw{Event}\ B}
+\rul{(T-FilterE)}{\tj f : A \to \kw{Bool} \qquad \tj e : \kw{Event}\ A}{\tj \kw{filterE}\ f\ e : \kw{Event}\ A}
+\rul{(T-MergeWith)}{\tj f : A \to A \to A \qquad \tj e_1 : \kw{Event}\ A \qquad \tj e_2 : \kw{Event}\ A}
+{\tj \kw{mergeWith}\ f\ e_1\ e_2 : \kw{Event}\ A}
+\rul{(T-Fold)}{\tj z : B \qquad \tj f : B \to A \to B \qquad \tj e : \kw{Event}\ A}
+{\tj \kw{fold}\ z\ f\ e : \kw{Behaviour}\ B}
+\rul{(T-Hold)}{\tj z : A \qquad \tj e : \kw{Event}\ A}{\tj \kw{hold}\ z\ e : \kw{Behaviour}\ A}
+\rul{(T-Snapshot)}{\tj f : A \to B \to C \qquad \tj e_1 : \kw{Event}\ A \qquad \tj e_2 : \kw{Behaviour}\ B}
+{\tj \kw{snapshot}\ f\ e_1\ e_2 : \kw{Event}\ C}
+
+\paragraph{Programs.} A program, desugared to a single expression $e_{\mathit{prog}}$, is well typed when
+\[ \emptyset;\Gamma_0 \vdash e_{\mathit{prog}} : \kw{UI}. \]
+where the initial context $ \Gamma_0 $ is given by collecting all event declarations $ \kw{event}\ x_i : A $ and setting
+\[
+  \Gamma_0(x_i) = \kw{Event}\ A
+\]
 \section{Reactive semantics and Proofs - TODO}
 
 Relevant papers:  Flapjax\cite{meyerovich:flapjax} and Embedding Dynamic Dataflow in a Call-by-Value Language\cite{10.1007/11693024_20}\\
