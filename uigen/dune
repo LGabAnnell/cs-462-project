@@ -1,10 +1,8 @@
 (include_subdirs unqualified)
 
-(executable
- (name main)
- (public_name uigen)
- (libraries unix)
- (flags (:standard -w -a)))
+(library
+ (name uigen)
+ (public_name uigen))
 
 ; (rule
 ;  (alias runtest)
