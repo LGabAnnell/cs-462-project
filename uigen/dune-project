@@ -1,0 +1,10 @@
+(lang dune 3.0)
+(name uigen)
+(generate_opam_files true)
+
+(package
+ (name uigen)
+ (synopsis "A DSL for UI generation")
+ (depends
+  ocaml
+  dune))

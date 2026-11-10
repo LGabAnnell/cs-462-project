@@ -20,5 +20,8 @@ _minted-*/
 *.pdf
 *.glo
 *.idx
-**/__opam/
-/uigen/__opam/
+**/_opam/
+**/_build/
+parser.mli
+parser.ml
+parser.output
