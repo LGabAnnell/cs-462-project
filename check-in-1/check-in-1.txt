@@ -1,0 +1,530 @@
+Programming Language Foundations
+A DSL for UI generation
+Gabriel Annell - 404 998
+
+Alex Bastianini - 434 990
+
+lars.annellrydenvald@epfl.ch
+
+alex.bastianini@epfl.ch
+
+November 9, 2026
+
+Contents
+1 Language grammar (EBNF)
+
+1
+
+2 Semantics
+2.1 Core λ-calculus . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+2.2 Graph construction . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+2.3 Update rules . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+2.4 Programs and Rendering . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+2
+3
+4
+4
+6
+
+3 Type system
+
+6
+
+4 Reactive semantics and Proofs - TODO
+4.1 Proofs . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+
+6
+6
+
+5 Project progression
+
+7
+
+1
+
+Language grammar (EBNF)
+
+We use EBNF[1] to define the grammar of our functional language.
+( ∗ Program ∗ )
+program = { d e c l a r a t i o n } , ” r e n d e r ” , e x p r e s s i o n
+(∗ De cl ar at io ns ∗)
+d e c l a r a t i o n = ” l e t ” , i d e n t i f i e r , [ ” : ” , type ] , ”=” , e x p r e s s i o n
+| ” e v e n t ” , i d e n t i f i e r , ” : ” , type
+(∗ Expressions ∗)
+e x p r e s s i o n = l i t e r a l | i d e n t i f i e r | lambda | e x p r e s s i o n e x p r e s s i o n
+| ” l e t ” , i d e n t i f i e r , [ ” : ” , type ] , ”=” , e x p r e s s i o n , ” i n ” , e x p r e s s i o n
+| ” i f ” e x p r e s s i o n , ” then ” , e x p r e s s i o n , ” e l s e ” , e x p r e s s i o n
+| e x p r e s s i o n binop e x p r e s s i o n
+| ”[” , expression , {”;” , expression } , ”]”
+lambda = ” f n ” , ” ( ” , i d e n t i f i e r , ” : ” , type , ” ) ” , ”−>”, e x p r e s s i o n
+binop = ”+” | ”−” | ”∗” | ”==” | ”<” | ”ˆ”
+l i t e r a l = integer | ” true ” | ” f a l s e ” | string | ”()”
+( ∗ Types ∗ )
+type = ” I n t ” | ” Bool ” | ” S t r i n g ” | ”UI” | ” Unit ” | ” L i s t ” , type
+
+1
+
+| ” Behaviour ” , type | ” Event ” , type | type ”−>” type | ” ( ” type ” ) ”
+( ∗ I d e n t i f i e r s and P r i m i t i v e Values ∗ )
+i d e n t i f i e r = ? [ a−zA−Z0−9]+ ? ;
+i n t e g e r = ? [0 −9]+ ? ;
+s t r i n g = ’” ’ , { s t r i n g c h a r | escape } , ’” ’
+
+;
+
+s t r i n g c h a r = ? any Unicode c h a r a c t e r e x c e p t ” and \ ?
+e s c a p e = ” \ ” , ( ’ ” ’ | ”\” | ”n” | ” t ” )
+
+;
+
+;
+
+The langage includes identifiers for functions that produce UI elements and combinators for treating signal types.
+We list these below with their type.
+Name
+show
+text
+button
+column, row
+dyn
+map
+map2
+mapE
+filterE
+mergeWith
+fold
+hold
+snapshot
+
+Type
+Int -> String
+String -> UI
+String -> Event Unit -> UI
+List UI -> UI
+Behaviour UI -> UI
+(’a -> ’b) -> Behaviour ’a -> Behaviour ’b
+(’a -> ’b -> ’c) -> Behaviour ’a -> Behaviour ’b -> Behaviour ’c
+(’a -> ’b) -> Event ’a -> Event ’b
+(’a -> Bool) -> Event ’a -> Event ’a
+(’a -> ’a -> ’a) -> Event ’a -> Event ’a -> Event ’a
+’b -> (’b -> ’a -> ’b) -> Event ’a -> Behaviour ’b
+’a -> Event ’a -> Behaviour ’a
+(’a -> ’b -> ’c) -> Event ’a -> Behaviour ’b -> Event ’c
+
+The meta-variables ’a are used as a placeholder to iterate over all possible types. In the langauge there is no
+polymorphism.
+
+2
+
+Semantics
+
+The language’s behaviour can be divided into distinct layers, which we’ll describe using different semantics that share
+domains and functions listed below:
+Semantic domains.
+σ ∈ Loc
+Σ ⊂ Loc
+
+store locations, one per node of the graph
+
+o ∈ Occ ::= none | some v
+
+contents of an event node
+
+k ∈ Kind
+
+node kinds, see below
+
+S : Loc ⇀ (Val ∪ Occ ∪ {⊥}) × Kind × 2Loc
+
+store: (contents, kind, dependents)
+
+I ⊆ Loc
+
+dirty set: nodes waiting to be recomputed
+
+ε(t) : Loc ⇀ Val
+
+occurrences fired by the environment at tick t
+
+Graph node kinds fall into two classes, which matches the Behaviour/Event split of the type system:
+behaviour kinds:
+event kinds:
+
+(map f σ) | (map2 f σ σ) | (fold f σ) | (hold σ)
+(src x) | (mapE f σ) | (filterE f σ) | (mergeWith f σ σ) | (snapshot f σ σ)
+
+where the σ’s are the parents of the node. A behaviour node stores a plain value that persists from tick to tick, while
+an event node stores an occurrence that is only meaningful for the current tick. The name x of a source is the name
+declared by event x : T, and is used by the CLI and by button.
+2
+
+Useful functions.
+VS (σ) = c
+
+where S(σ) = (c, , )
+
+S[σ ← c] = S[σ 7→ (c, k, Σ)]
+
+current contents
+
+where S(σ) = ( , k, Σ)
+
+replace contents only
+
+reg(σ, P, S) = S[σ ′ 7→ (c, k, Σ′ ∪ {σ})] ∀σ ′ ∈ P | S(σ ′ ) = (c, k, Σ′ )
+S
+DS (P ) = σ′ ∈P Σ′ where S(σ ′ ) = ( , , Σ′ )
+dfrdS (I) = DS+ (I)
+
+direct dependents
+nodes downstream of a dirty node
+
+(
+Σ c ̸= c0
+Ab (Σ, c0 , c) =
+∅ otherwise
+(
+Σ o = some
+Ae (Σ, o) =
+∅ o = none
+
+behaviours: propagate on change
+
+events: propagate on presence
+
+clear(S) = S[σ ← none] ∀σ with an event kind
+
+forget last tick’s occurrences
+
+inject(S, εt ) = S[σ ← some v] ∀(σ, v) ∈ εt
+
+some v o1 = some a, o2 = some b, f a b −→∗c v
+
+
+
+some a o = some a, o = none
+1
+2
+merge(f, o1 , o2 ) =
+
+some
+b
+o
+=
+none,
+o
+=
+some b
+1
+2
+
+
+
+none
+o1 = o2 = none
+
+2.1
+
+register σ as dependent of P
+
+insert the environment’s occurrences
+
+Core λ-calculus
+
+The core of the language can be easily translated to an applied λ-calculus with if, let, pure built-insand lists of
+expressions. We define a small-step CBV operational semantics for this subset.
+Values, expressions and evaluation contexts.
+are split into two groups:
+
+Here ⊕ ranges over binop and b over the built-ins, the latter
+
+• the pure ones, show, text, button, column, row and dyn, handled by δ below;
+• the reactive ones, map, map2, mapE, filterE, mergeWith, fold, hold and snapshot, together with sourcex , handled
+by the graph construction rules.
+v ::= n | true | false | s | () | [v; . . . ; v] | u | σ | λ(x:T ). e
+u ::= text s | button s σ | column [u; . . . ; u] | row [u; . . . ; u] | dyn σ
+e ::= v | x | e e | if e then e else e | let x = e in e | e ⊕ e | [e; . . . ; e] | b e · · · e | sourcex
+E ::= [ ] | E e | v E | if E then e else e | let x = E in e | E ⊕ e | v ⊕ E
+| [v; . . . ; v; E; e; . . . ; e] | b v · · · v E e · · · e
+Core reduction.
+
+The following rules relate expressions, e −→c e′ :
+(λ(x:T ). e) v −→c e[v/x]
+
+(βv )
+
+let x = v in e −→c e[v/x]
+
+(Let)
+
+if true then e1 else e2 −→c e1
+
+(If-T)
+
+if false then e1 else e2 −→c e2
+
+(If-F)
+
+v1 ⊕ v2 −→c δ(⊕, v1 , v2 )
+
+(δ-op)
+
+b v1 · · · vn −→c δ(b, v1 , . . . , vn )
+
+(b pure)
+
+(δ-prim)
+
+where δ is the usual interpretation of the arithmetic, comparison and string operators and of the pure built-ins
+(δ(show, n) is the decimal string of n, δ(text, s) = text s, and so on). A core step can happen anywhere in an
+evaluation position, while the rest of the configuration is left untouched:
+e −→c e′
+(Ctx)
+⟨S, I, E[e]⟩ −→ ⟨S, I, E[e′ ]⟩
+3
+
+We write −→∗c for the reflexive transitive closure of −→c .
+
+2.2
+
+Graph construction
+
+This extention to the core λ-calculus constructs the dataflow graph when the program is first run. We use small-step
+operational semantics to describe this.
+Construction rules. Configurations are ⟨S, I, e⟩, and the core rules above are lifted to them by (Ctx). In each
+rule below σ ∈
+/ dom(S) is fresh, so every node’s parents have strictly smaller locations than the node itself. This
+makes the graph acyclic by construction. Declarations are sequential, so a node can only refer to earlier ones. The
+declaration event x : T desugars to let x = sourcex in. . .
+S ′ = S[σ 7→ (none, (src x), ∅)]
+(Src)
+⟨S, I, E[sourcex ]⟩ −→ ⟨S ′ , I, E[σ]⟩
+S ′ = reg(σ, {σ1 }, S[σ 7→ (⊥, (map f σ1 ), ∅)])
+(Map)
+⟨S, I, E[map f σ1 ]⟩ −→ ⟨S ′ , I ∪ {σ}, E[σ]⟩
+S ′ = reg(σ, {σ1 , σ2 }, S[σ 7→ (⊥, (map2 f σ1 σ2 ), ∅)])
+(Map2)
+⟨S, I, E[map2 f σ1 σ2 ]⟩ −→ ⟨S ′ , I ∪ {σ}, E[σ]⟩
+S ′ = reg(σ, {σ1 }, S[σ 7→ (none, (mapE f σ1 ), ∅)])
+(MapE)
+⟨S, I, E[mapE f σ1 ]⟩ −→ ⟨S ′ , I, E[σ]⟩
+S ′ = reg(σ, {σ1 }, S[σ 7→ (none, (filterE f σ1 ), ∅)])
+(FilterE)
+⟨S, I, E[filterE f σ1 ]⟩ −→ ⟨S ′ , I, E[σ]⟩
+S ′ = reg(σ, {σ1 , σ2 }, S[σ 7→ (none, (mergeWith f σ1 σ2 ), ∅)])
+(MergeWith)
+⟨S, I, E[mergeWith f σ1 σ2 ]⟩ −→ ⟨S ′ , I, E[σ]⟩
+S ′ = reg(σ, {σ1 }, S[σ 7→ (z, (fold f σ1 ), ∅)])
+(Fold)
+⟨S, I, E[fold z f σ1 ]⟩ −→ ⟨S ′ , I, E[σ]⟩
+S ′ = reg(σ, {σ1 }, S[σ 7→ (z, (hold σ1 ), ∅)])
+(Hold)
+⟨S, I, E[hold z σ1 ]⟩ −→ ⟨S ′ , I, E[σ]⟩
+S ′ = reg(σ, {σe , σb }, S[σ 7→ (none, (snapshot f σe σb ), ∅)])
+(Snapshot)
+⟨S, I, E[snapshot f σe σb ]⟩ −→ ⟨S ′ , I, E[σ]⟩
+Only Map and Map2 nodes are added to the dirty set at construction. They start at ⊥ and are initialised by
+the update rules once their parents are ready, so construction never applies a user function. All other nodes have
+known initial contents: the initial value for fold and hold, and none for events, since nothing has happened yet.
+
+2.3
+
+Update rules
+
+These rules describe how the store evolves in response to external events. A step is ⟨S, I, t⟩ ,→ ⟨S ′ , I ′ , t′ ⟩, where t
+is the current tick and f · · · −→∗c v uses only the core reduction. A dirty node σ may only be recomputed when no
+dirty node is upstream of it, i.e. σ ∈ I \ dfrdS (I).
+4
+
+Behaviour nodes.
+σ ∈ I \ dfrdS (I)
+S(σ) = (c0 , (map f σ1 ), Σ)
+f VS (σ1 ) −→∗c c
+(U-Map)
+⟨S, I, t⟩ ,→ ⟨S[σ ← c], (I \ {σ}) ∪ Ab (Σ, c0 , c), t⟩
+σ ∈ I \ dfrdS (I)
+S(σ) = (c0 , (map2 f σ1 σ2 ), Σ)
+f VS (σ1 ) VS (σ2 ) −→∗c c
+(U-Map2)
+⟨S, I, t⟩ ,→ ⟨S[σ ← c], (I \ {σ}) ∪ Ab (Σ, c0 , c), t⟩
+σ ∈ I \ dfrdS (I)
+
+S(σ) = (a, (fold f σ1 ), Σ)
+VS (σ1 ) = some v
+⟨S, I, t⟩ ,→ ⟨S[σ ← a′ ], (I \ {σ}) ∪ Ab (Σ, a, a′ ), t⟩
+
+σ ∈ I \ dfrdS (I)
+
+S(σ) = (a, (fold f σ1 ), Σ)
+⟨S, I, t⟩ ,→ ⟨S, I \ {σ}, t⟩
+
+f a v −→∗c a′
+
+VS (σ1 ) = none
+
+(U-Fold)
+
+(U-Fold-Idle)
+
+σ ∈ I \ dfrdS (I)
+S(σ) = (a, (hold σ1 ), Σ)
+VS (σ1 ) = some v
+(U-Hold)
+⟨S, I, t⟩ ,→ ⟨S[σ ← v], (I \ {σ}) ∪ Ab (Σ, a, v), t⟩
+U-Hold-Idle is the analogue of U-Fold-Idle: if the parent has no occurrence, σ is simply removed from I and
+keeps its value.
+Event nodes.
+σ ∈ I \ dfrdS (I)
+
+σ ∈ I \ dfrdS (I)
+
+S(σ) = ( , (mapE f σ1 ), Σ) VS (σ1 ) = some v f v −→∗c v ′
+⟨S, I, t⟩ ,→ ⟨S[σ ← o], (I \ {σ}) ∪ Ae (Σ, o), t⟩
+
+o = some v ′
+
+(
+
+b = true
+b = false
+
+S(σ) = ( , (filterE f σ1 ), Σ)
+
+VS (σ1 ) = some v
+
+f v −→∗c b
+
+o=
+
+some v
+none
+
+(U-MapE)
+
+⟨S, I, t⟩ ,→ ⟨S[σ ← o], (I \ {σ}) ∪ Ae (Σ, o), t⟩
+
+σ ∈ I \ dfrdS (I)
+
+S(σ) = ( , (mergeWith f σ1 σ2 ), Σ) o = merge(f, VS (σ1 ), VS (σ2 ))
+(U-Merge)
+⟨S, I, t⟩ ,→ ⟨S[σ ← o], (I \ {σ}) ∪ Ae (Σ, o), t⟩
+
+(
+σ ∈ I \ dfrdS (I)
+
+(U-FilterE)
+
+S(σ) = ( , (snapshot f σe σb ), Σ)
+
+o=
+
+some v
+none
+
+VS (σe ) = some a, f a VS (σb ) −→∗c v
+otherwise
+
+⟨S, I, t⟩ ,→ ⟨S[σ ← o], (I \ {σ}) ∪ Ae (Σ, o), t⟩
+
+(U-Snapshot)
+
+Snapshot is registered on both parents so that the behaviour is up to date when the event is processed, but only
+an occurrence of the event produces an output: a tick in which only the behaviour changed yields none.
+Time. Time advances only when the system is stable, so when I = ∅. All events are then reset, the occurrences of
+the next tick are inserted into their sources, and the direct dependents of those sources become dirty:
+F = dom(ε(t + 1))
+S ′ = inject(clear(S), ε(t + 1))
+(U-Tick)
+⟨S, ∅, t⟩ ,→ ⟨S ′ , DS (F ), t + 1⟩
+
+5
+
+2.4
+
+Programs and Rendering
+
+A program is simply syntactical sugar that evaluates as nested lets with expression at the end, whose final value
+is compiled to HTML using the rendering function, defined by recursion as
+R(S, text s) = <span> ++ esc(s) ++ </span>
+R(S, button s σ) = <button data-on=" ++ x ++ "> ++ esc(s) ++ </button>
+where S(σ) = ( , (src x), )
+R(S, column [u1 ; . . . ; un ]) = <div class="column">
+++ R(S, u1 ) ++ · · · ++ R(S, un ) ++ </div>
+R(S, row [u1 ; . . . ; un ]) = <div class="row">
+++ R(S, u1 ) ++ · · · ++ R(S, un ) ++ </div>
+R(S, dyn σ) = R(S, VS (σ))
+where esc escapes the HTML special characters, and the output is indented when printed. The final pipeline describing
+the run of a program is as follows:
+1. Desugar the program into a single expression eprog : the declarations become nested lets ending in the render
+expression, and event x : T becomes let x = sourcex in.
+2. Construct the graph: ⟨∅, ∅, eprog ⟩ −→∗ ⟨S0 , I0 , u⟩, where u is a UI value. This runs once, and the graph
+never changes afterwards.
+3. Initialise: ⟨S0 , I0 , 0⟩ ,→∗ ⟨S1 , ∅, 0⟩, using every update rule except U-Tick. Print the frame h0 = R(S1 , u).
+4. For each tick: parse the next CLI line into ε(t + 1), checking that every name is a declared source, every
+payload has the declared type, and no source appears twice. Then run
+⟨St , ∅, t⟩ ,→ ⟨S ′ , I ′ , t + 1⟩ ,→∗ ⟨St+1 , ∅, t + 1⟩
+and compute ht+1 = R(St+1 , u). Print it only if ht+1 ̸= ht .
+5. Repeat until the end of the input. A malformed line is reported on standard error and leaves the state
+unchanged.
+The same u is used for every frame: only the contents of the store change, and dyn nodes are the only places where
+the rendered text depends on them.
+
+3
+
+Type system
+
+Based on simply-typed lambda calculus, it includes the types introduced in the syntax.
+
+4
+
+Reactive semantics and Proofs - TODO
+
+Relevant papers: Flapjax[3] and Embedding Dynamic Dataflow in a Call-by-Value Language[4]
+Following the results these papers, our goal is to implement a push-driven dataflow evaluation by maintaining a
+reactive dependency graph G to manage signal propagation from sources to sinks.
+Initially our sources will only include events input manually from a CLI. These will be parsed by the OCaml
+interpreter and, if necessary, a new block of HTML will be output.
+
+4.1
+
+Proofs
+
+We aim to prove Glitch-Freedom: for any topologically sorted evaluation of G we have that ∀v ∈ V the node v is
+evaluated at most once. This guarantees that no intermediate inconsistent states are made visible to the user.
+6
+
+5
+
+Project progression
+
+In this first iteration, we have not achieved much as it fell to the back of the list of things we had to do. We still
+need to define the sections marked as TODO. A bit more research is needed as well.
+Generative AI disclosure
+Generative AI was used for research, LATEX commands and trying to make sure what is written is sane.
+
+References
+[1]
+
+International Organization for Standardization, ed. ISO/IEC 14977:1996 Information Technology - Syntactic
+Metalanguage - Extended BNF. 1996.
+
+[2]
+
+Jaemin Hong and Sukyoung Ryu. Introduction to Programming Languages. August 10, 2023. Aug. 2023. url:
+https://hjaem.info/pdfs/itpl-2023-08-10.pdf.
+
+[3]
+
+Leo A. Meyerovich et al. “Flapjax: A Programming Language for Ajax Applications”. In: Object Oriented
+Programming, Systems, Languages and Applications (OOPSLA). 2009.
+
+[4]
+
+Gregory H. Cooper and Shriram Krishnamurthi. “Embedding Dynamic Dataflow in a Call-by-Value Language”.
+In: Programming Languages and Systems. Ed. by Peter Sestoft. Berlin, Heidelberg: Springer Berlin Heidelberg,
+2006, pp. 294–308. isbn: 978-3-540-33096-7.
+
+7
+
+

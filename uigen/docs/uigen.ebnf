@@ -1,0 +1,34 @@
+(* Program *)
+program = { declaration }, "render", expression
+
+(* Declarations *)
+declaration = "let", identifier, [":", type], "=", expression
+            | "event", identifier, ":", type
+
+(* Expressions *)
+expression = literal | identifier | lambda | expression expression
+            | "let", identifier, [":", type], "=", expression, "in", expression
+            | "if" expression, "then", expression, "else", expression
+            | expression binop expression
+            | "[", expression, {";", expression}, "]"
+
+lambda = "fn", "(", identifier, ":", type, ")", "->", expression
+
+binop = "+" | "-" | "*" | "==" | "<" | "^"
+
+literal = integer | "true" | "false" | string | "()"
+
+(* Types *)
+type = "Int" | "Bool" | "String" | "UI" | "Unit" | "List", type 
+      | "Behaviour", type | "Event", type | type "->" type | "(" type ")"
+
+(* Identifiers and Primitive Values *)
+identifier = ? [a-zA-Z0-9]+ ? ;
+
+integer = ? [0-9]+ ? ;
+
+string = '"', { string_char | escape }, '"'  ;
+
+string_char = ? any Unicode character except " and \ ?  ;
+
+escape = "\", ( '"' | "\" | "n" | "t" )  ;
