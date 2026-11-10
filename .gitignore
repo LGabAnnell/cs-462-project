@@ -20,3 +20,5 @@ _minted-*/
 *.pdf
 *.glo
 *.idx
+**/__opam/
+/uigen/__opam/
