@@ -10,6 +10,12 @@ open Ast
 %token LPAREN RPAREN LBRACKET RBRACKET COLON SEMICOLON
 %token ASSIGN ARROW PLUS MINUS STAR EQUAL LESS CARET EOF
 
+/* Greedy expression bodies must shift operators and following atoms before
+   reducing an enclosing expression. The grammar levels below determine the
+   actual operator precedence and associativity. */
+%nonassoc EXPR_BOUNDARY
+%nonassoc EQUAL LESS PLUS MINUS CARET STAR LET IF FN TRUE FALSE INTEGER IDENTIFIER STRING LPAREN LBRACKET
+
 %start program
 %type <Ast.program> program
 
@@ -52,7 +58,7 @@ type_prefix:
 ;
 
 expression:
-  comparison { $1 }
+  comparison %prec EXPR_BOUNDARY { $1 }
 ;
 
 comparison:
@@ -62,19 +68,19 @@ comparison:
 ;
 
 concatenation:
-  addition { $1 }
+  addition %prec EXPR_BOUNDARY { $1 }
 | addition CARET concatenation { Binary (Concat, $1, $3) }
 ;
 
 addition:
-  multiplication { $1 }
-| addition PLUS multiplication { Binary (Add, $1, $3) }
-| addition MINUS multiplication { Binary (Subtract, $1, $3) }
+  multiplication %prec EXPR_BOUNDARY { $1 }
+| addition PLUS multiplication %prec EXPR_BOUNDARY { Binary (Add, $1, $3) }
+| addition MINUS multiplication %prec EXPR_BOUNDARY { Binary (Subtract, $1, $3) }
 ;
 
 multiplication:
-  application { $1 }
-| multiplication STAR application { Binary (Multiply, $1, $3) }
+  application %prec EXPR_BOUNDARY { $1 }
+| multiplication STAR application %prec EXPR_BOUNDARY { Binary (Multiply, $1, $3) }
 ;
 
 application:
