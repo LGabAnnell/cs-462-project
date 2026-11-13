@@ -1,0 +1,39 @@
+name: Build uigen
+
+on:
+  push:
+    paths:
+      - "uigen/**"
+      - ".github/workflows/build-uigen.yaml"
+  pull_request:
+    paths:
+      - "uigen/**"
+      - ".github/workflows/build-uigen.yaml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: uigen
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "5.4.1"
+
+      - name: Install dependencies
+        run: opam install . --deps-only --with-test --yes
+
+      - name: Build
+        run: opam exec -- dune build
+
+      - name: Run tests
+        run: opam exec -- dune runtest
