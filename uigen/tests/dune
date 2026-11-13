@@ -2,4 +2,10 @@
 
 (test
  (name parser_test)
+ (modules parser_test)
+ (libraries uigen))
+
+(test
+ (name eval_test)
+ (modules eval_test)
  (libraries uigen))
