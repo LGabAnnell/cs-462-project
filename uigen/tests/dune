@@ -9,3 +9,8 @@
  (name eval_test)
  (modules eval_test)
  (libraries uigen))
+
+(rule
+ (alias runtest)
+ (deps cli_test.sh)
+ (action (run bash %{dep:cli_test.sh} %{exe:../bin/main.exe})))
