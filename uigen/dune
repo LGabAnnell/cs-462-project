@@ -3,16 +3,3 @@
 (library
  (name uigen)
  (public_name uigen))
-
-; (rule
-;  (alias runtest)
-;  (deps (glob_files basic-tests/*.imp) (glob_files lists/*.imp))
-;  (action
-;   (bash "status=0; for file in basic-tests/*.imp lists/*.imp; do
-;     if ./%{exe:main.exe} -verify \"$file\"; then
-;       printf 'OK: %s\\n' \"$file\";
-;     else
-;       printf 'Failed: %s\\n' \"$file\";
-;       status=1;
-;     fi;
-;   done; exit $status")))
