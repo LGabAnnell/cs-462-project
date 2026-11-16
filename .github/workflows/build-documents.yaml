@@ -1,15 +1,15 @@
-name: Build proposal PDF
+name: Build
 
 on:
   push:
     paths:
-      - "proposal/**"
-      - "check-in-1/**"
-      - ".github/workflows/build-docuemnts.yaml"
+      - "report/**"
+      - ".github/workflows/build-documents.yaml"
+    branches:
+      - main
   pull_request:
     paths:
-      - "proposal/**"
-      - "check-in-1/**"
+      - "report/**"
       - ".github/workflows/build-documents.yaml"
 
 permissions:
@@ -35,7 +35,7 @@ jobs:
           root_file: check-in-1/check-in-1.tex
           work_in_root_file_dir: true
 
-      - name: Upload proposal 
+      - name: Upload proposal
         uses: actions/upload-artifact@v7
         with:
           name: proposal-pdf
