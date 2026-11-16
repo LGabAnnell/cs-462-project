@@ -1,0 +1,77 @@
+
+\section{Language grammar (EBNF)}
+
+We use EBNF\cite{ISO14977} to define the grammar of our functional language.
+\begin{lstlisting}
+(* Program *)
+program = { declaration }, "render", expression
+
+(* Declarations *)
+declaration = "let", identifier, [":", type], "=", expression
+            | "event", identifier, ":", type
+
+(* Expressions *)
+expression = literal | identifier | lambda | expression expression
+            | "let", identifier, [":", type], "=", expression, "in", expression
+            | "if" expression, "then", expression, "else", expression
+            | expression binop expression
+            | "[", expression, {";", expression}, "]"
+
+lambda = "fn", "(", identifier, ":", type, ")", "->", expression
+
+binop = "+" | "-" | "*" | "==" | "<" | "^"
+
+literal = integer | "true" | "false" | string | "()"
+
+(* Types *)
+type = "Int" | "Bool" | "String" | "UI" | "Unit" | "List", type
+      | "Behaviour", type | "Event", type | type "->" type | "(" type ")"
+
+(* Identifiers and Primitive Values *)
+identifier = ? [a-zA-Z0-9]+ ? ;
+
+integer = ? [0-9]+ ? ;
+
+string = '"', { string_char | escape }, '"'  ;
+
+string_char = ? any Unicode character except " and \ ?  ;
+
+escape = "\", ( '"' | "\" | "n" | "t" )  ;
+\end{lstlisting}
+
+\medskip
+\noindent The langage includes identifiers for functions that produce UI elements and combinators for treating signal types. We list these below with their type.
+
+\begin{center}
+  \begin{tabular}{c | c}
+    Name & Type\\
+    \hline
+    \texttt{show} & \texttt{Int -> String}\\
+    \hline
+    \texttt{text} & \texttt{String -> UI}\\
+    \hline
+    \texttt{button} & \texttt{String -> Event Unit -> UI}\\
+    \hline
+    \texttt{column}, \texttt{row} & \texttt{List UI -> UI}\\
+    \hline
+    \texttt{dyn} & \texttt{Behaviour UI -> UI}\\
+    \hline
+    \texttt{map} & \texttt{('a -> 'b) -> Behaviour 'a -> Behaviour 'b}\\
+    \hline
+    \texttt{map2} & \texttt{('a -> 'b -> 'c) -> Behaviour 'a -> Behaviour 'b -> Behaviour 'c}\\
+    \hline
+    \texttt{mapE} & \texttt{('a -> 'b) -> Event 'a -> Event 'b}\\
+    \hline
+    \texttt{filterE} & \texttt{('a -> Bool) -> Event 'a -> Event 'a}\\
+    \hline
+    \texttt{mergeWith} & \texttt{('a -> 'a -> 'a) -> Event 'a -> Event 'a -> Event 'a}\\
+    \hline
+    \texttt{fold} & \texttt{'b -> ('b -> 'a -> 'b) -> Event 'a -> Behaviour 'b}\\
+    \hline
+    \texttt{hold} & \texttt{'a -> Event 'a -> Behaviour 'a}\\
+    \hline
+    \texttt{snapshot} & \texttt{('a -> 'b -> 'c) -> Event 'a -> Behaviour 'b -> Event 'c}\\
+\end{tabular}
+\end{center}
+
+The meta-variables \texttt{'a} are used as a placeholder to iterate over all possible types. In the langauge there is no polymorphism.
