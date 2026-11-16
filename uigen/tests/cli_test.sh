@@ -36,3 +36,16 @@ printf 'render if 1 then 2 else 3\n' | expect_error 'condition is not a boolean:
 printf 'event click : Unit\nrender 1\n' | expect_error 'reactive execution is not implemented'
 expect_error 'Usage: uigen [FILE]' one two
 expect_error "$tmpdir/missing.ui" "$tmpdir/missing.ui"
+
+expect_program() {
+  file=$1
+  expected=$2
+  if ! "$exe" "$file" >"$tmpdir/out" 2>"$tmpdir/err"; then fail "$file: $(cat "$tmpdir/err")"; fi
+  [ "$(cat "$tmpdir/out")" = "$expected" ] || fail "$file: expected $expected, got $(cat "$tmpdir/out")"
+  [ ! -s "$tmpdir/err" ] || fail "$file: unexpected stderr"
+}
+expect_program programs/arithmetic.ui '[31; 18; false]'
+expect_program programs/closures.ui '[11; 15; 100]'
+expect_program programs/conditionals.ui '["pass"; true; "safe"]'
+expect_program programs/functions.ui '[7; 11; 16]'
+expect_program programs/strings.ui '["Hello, world!"; "line\nnext"; (); [true; false]]'

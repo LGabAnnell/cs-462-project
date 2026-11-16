@@ -1,0 +1,4 @@
+let base = 10
+let addbase = fn (x : Int) -> base + x
+let base = 100
+render [addbase 1; addbase 5; base]
