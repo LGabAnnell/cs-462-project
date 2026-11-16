@@ -148,7 +148,9 @@ A_{\mathrm{b}}(\Sigma,c_0,c) &= \begin{cases}\Sigma & c \neq c_0\\ \emptyset & \
 A_{\mathrm{e}}(\Sigma,o) &= \begin{cases}\Sigma & o = \some{\_}\\ \emptyset & o = \none\end{cases} && \text{events: propagate on presence}\\
 \mathrm{clear}(S) &= S[\sigma \leftarrow \none]\ \ \forall \sigma \text{ with an event kind} && \text{forget last tick's occurrences}\\
 \mathrm{inject}(S,\varepsilon_t) &= S[\sigma \leftarrow \some{v}]\ \ \forall (\sigma,v) \in \varepsilon_t && \text{insert the environment's occurrences}\\
-\mathrm{merge}(f,o_1,o_2) &= \begin{cases}\some{v} & o_1 = \some{a},\ o_2 = \some{b},\ f\ a\ b \cstar v\\ \some{a} & o_1 = \some{a},\ o_2 = \none\\ \some{b} & o_1 = \none,\ o_2 = \some{b}\\ \none & o_1 = o_2 = \none\end{cases}
+\mathrm{merge}(f,o_1,o_2) &= \begin{cases}\some{v} & o_1 = \some{a},\ o_2 = \some{b},\ f\ a\ b \cstar v\\ \some{a} & o_1 = \some{a},\ o_2 = \none\\ \some{b} & o_1 = \none,\ o_2 = \some{b}\\ \none & o_1 = o_2 = \none\end{cases}\\
+\mathrm{filter}(b,v) &= \begin{cases}\some{v} & b = \kw{true}\\ \none & b = \kw{false}\end{cases}\\
+\mathrm{snapshot}(f,o,c) &= \begin{cases}\some{v} & o = \some{a},\ f\ a\ c \cstar v\\ \none & o = \none\end{cases}
 \end{align*}
 
 \subsection{Core $ \lambda $-calculus}
@@ -225,13 +227,13 @@ These rules describe how the store evolves in response to external events. A ste
 \textsc{U-Hold-Idle} is the analogue of \textsc{U-Fold-Idle}: if the parent has no occurrence, $\sigma$ is simply removed from $I$ and keeps its value.
 
 \paragraph{Event nodes.}
-\rul{(U-MapE)}{\fire \qquad S(\sigma) = (\_,(\kw{mapE}\ f\ \sigma_1),\Sigma) \\ V_S(\sigma_1) = \some{v} \qquad f\ v \cstar v' \qquad o = \some{v'}}
+\rul{(U-MapE)}{\fire \quad S(\sigma) = (\_,(\kw{mapE}\ f\ \sigma_1),\Sigma) \quad V_S(\sigma_1) = \some{v} \quad f\ v \cstar v' \quad o = \some{v'}}
 {\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
-\rul{(U-FilterE)}{\fire \qquad S(\sigma) = (\_,(\kw{filterE}\ f\ \sigma_1),\Sigma) \\ V_S(\sigma_1) = \some{v} \qquad f\ v \cstar b \\ o = \begin{cases}\some{v} & b = \kw{true}\\ \none & b = \kw{false}\end{cases}}
+\rul{(U-FilterE)}{\fire \quad S(\sigma) = (\_,(\kw{filterE}\ f\ \sigma_1),\Sigma) \quad V_S(\sigma_1) = \some{v} \quad f\ v \cstar b \quad o = \mathrm{filter}(b,v)}
 {\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
-\rul{(U-Merge)}{\fire \qquad S(\sigma) = (\_,(\kw{mergeWith}\ f\ \sigma_1\ \sigma_2),\Sigma) \\ o = \mathrm{merge}(f,V_S(\sigma_1),V_S(\sigma_2))}
+\rul{(U-Merge)}{\fire \quad S(\sigma) = (\_,(\kw{mergeWith}\ f\ \sigma_1\ \sigma_2),\Sigma) \quad o = \mathrm{merge}(f,V_S(\sigma_1),V_S(\sigma_2))}
 {\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
-\rul{(U-Snapshot)}{\fire \qquad S(\sigma) = (\_,(\kw{snapshot}\ f\ \sigma_e\ \sigma_b),\Sigma) \\ o = \begin{cases}\some{v} & V_S(\sigma_e) = \some{a},\ f\ a\ V_S(\sigma_b) \cstar v\\ \none & \text{otherwise}\end{cases}}
+\rul{(U-Snapshot)}{\fire \quad S(\sigma) = (\_,(\kw{snapshot}\ f\ \sigma_e\ \sigma_b),\Sigma) \quad o = \mathrm{snapshot}(f,V_S(\sigma_e),V_S(\sigma_b))}
 {\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
 \textsc{Snapshot} is registered on both parents so that the behaviour is up to date when the event is processed, but only an occurrence of the event produces an output: a tick in which only the behaviour changed yields $\none$.
 
