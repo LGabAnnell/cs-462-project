@@ -1,0 +1,3 @@
+let add = fn (x: Int) -> fn (y: Int) -> x + y
+let double = fn (x: Int) -> add x x
+render add (double 3) 4
