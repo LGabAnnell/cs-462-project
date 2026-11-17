@@ -1,0 +1,3 @@
+let greeting = "Hello, "
+let name = "world"
+render [greeting ^ name ^ "!"; "line\nnext"; (); [true; false]]

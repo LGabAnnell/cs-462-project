@@ -20,3 +20,8 @@ _minted-*/
 *.pdf
 *.glo
 *.idx
+**/_opam/
+**/_build/
+parser.mli
+parser.ml
+parser.output

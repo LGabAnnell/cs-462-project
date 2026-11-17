@@ -1,0 +1,6 @@
+(include_subdirs no)
+
+(executable
+ (name main)
+ (public_name uigen)
+ (libraries uigen))

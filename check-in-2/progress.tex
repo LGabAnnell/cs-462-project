@@ -1,0 +1,59 @@
+\documentclass{article}
+\usepackage[margin=0.75in]{geometry}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\title{
+  Check-in 2: Progress Report
+}
+\author{
+  Gabriel Annell - 404 998\\
+  \small{\textit{lars.annellrydenvald@epfl.ch}} \and Alex Bastianini - 434 990\\
+  \small{\textit{alex.bastianini@epfl.ch}}
+}
+
+\begin{document}
+
+\maketitle
+
+\medskip
+\noindent\textbf{Vision.} The project consists of designing a functional language based on simply-typed lambda calculus for generating reactive UI. We aim to build an interpreter that outputs HTML given an initial program that can include reactive values. After the first run, the interpreter awaits for the user to input an event, and the output is changed accordingly. We wish to prove that our semantics don't generate inconsistent states (glitch-freedom), that every update finishes in a finite number of stepps (productivity) and that progress and preservation hold for the graph construction and for updates.
+
+\medskip
+\noindent\textbf{Summary of progress.} Since the first check-in we have made noticeable progress. We have formally defined semantics for both graph construction and updates, and given type judgement rules for type-checking initial programs. In addition, we have also scoped the properties that we would like to prove and we have thought about how we would do so.
+
+We have also implemented a parser for the language in OCaml.
+
+\medskip
+\noindent\textbf{Activity breakdown.}\\
+Alex Bastianini
+\begin{itemize}
+\item Language semantics
+\item Type system
+\item Scoping proofs
+\end{itemize}
+
+\noindent Gabriel Annell
+\begin{itemize}
+\item Language syntax
+\item Parser implementation
+\end{itemize}
+
+\medskip
+\noindent\textbf{Productivity analysis.} For this check-in we were able to catch up to our initial expectations after failing to complete the first check-in. We have also better defined our goals, to which the type system and the proofs were added.
+
+\medskip
+\noindent\textbf{Self-assessment.} Our grade for this phase would be satisfactory-good, as we were able to catch up to our initial goals of defining semantics and starting on the implementation. However, we're still at the first step regarding proofs. 
+
+\medskip
+\noindent\textbf{Goals for the next phase.}
+\begin{itemize}
+\item Satisfactory: complete the implementation of the interpreter and prove glitch-freedom
+\item Good: in addition, prove type soundness and productivity
+\item Excellent: do all of the above and find other interesting properties to prove, or add the possibility to add/remove nodes of the graph in a reactive manner (define semantics and redo proofs).
+\end{itemize}
+
+\end{document}

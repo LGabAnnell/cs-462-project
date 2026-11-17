@@ -1,0 +1,44 @@
+(* Program *)
+program = { declaration }, "render", expression
+
+(* Declarations *)
+declaration = "let", identifier, [":", type], "=", expression
+            | "event", identifier, ":", type
+
+(* Expressions *)
+expression = comparison
+
+(* Repetitions at these levels associate left; concatenation associates right. *)
+comparison = concatenation, { ("==" | "<"), concatenation }
+concatenation = addition, [ "^", concatenation ]
+addition = multiplication, { ("+" | "-"), multiplication }
+multiplication = application, { "*", application }
+application = atom, { atom }
+
+(* Lambda, let, and if bodies extend as far right as possible. *)
+atom = literal | identifier | lambda
+     | "let", identifier, [":", type], "=", expression, "in", expression
+     | "if", expression, "then", expression, "else", expression
+     | "[", expression, {";", expression}, "]"
+
+lambda = "fn", "(", identifier, ":", type, ")", "->", expression
+
+literal = integer | "true" | "false" | string | "()"
+
+(* Types *)
+(* Type constructors bind more tightly than the right-associative arrow. *)
+type = type_prefix, [ "->", type ]
+type_prefix = "Int" | "Bool" | "String" | "UI" | "Unit"
+            | "List", type_prefix | "Behaviour", type_prefix | "Event", type_prefix
+            | "(", type, ")"
+
+(* Identifiers and Primitive Values *)
+identifier = ? [a-zA-Z0-9]+ ? ;
+
+integer = ? [0-9]+ ? ;
+
+string = '"', { string_char | escape }, '"'  ;
+
+string_char = ? any Unicode character except " and \ ?  ;
+
+escape = "\", ( '"' | "\" | "n" | "t" )  ;

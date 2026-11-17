@@ -40,82 +40,18 @@
 \maketitle
 \tableofcontents
 
-\section{Language grammar (EBNF)}
+\section{Introduction}
 
-We use EBNF\cite{ISO14977} to define the grammar of our functional language.
-\begin{lstlisting}
-(* Program *)
-program = { declaration }, "render", expression
+We propose a language for user interface (UI) generation, meant to be passed to an LLM and then displayed in HTML. The language features some built-in functions for UI elements as well as reactive semantics for UI updates. It operates in two stages:
 
-(* Declarations *)
-declaration = "let", identifier, [":", type], "=", expression
-            | "event", identifier, ":", type
+\begin{enumerate}
+	\item Parse and execute the provided code. This will create a graph of UI elements and print them out.
+	\item Wait for updates from the UI, and when they come in, the graph will be updated with the actions provided in the event handlers.
+\end{enumerate}
 
-(* Expressions *)
-expression = literal | identifier | lambda | expression expression
-            | "let", identifier, [":", type], "=", expression, "in", expression
-            | "if" expression, "then", expression, "else", expression
-            | expression binop expression
-            | "[", expression, {";", expression}, "]"
+\noindent The basis for our semantics come from Embedding Dynamic Dataflow in a Call-by-Value Language\cite{10.1007/11693024_20}, from which we took the graph evaluation model. However, this is not a direct implementation, as we specialized the theory of \textit{functional reactive programming} (FRP) for the domain of UIs with the addition of a type system and formal proofs not present in the original paper.
 
-lambda = "fn", "(", identifier, ":", type, ")", "->", expression
-
-binop = "+" | "-" | "*" | "==" | "<" | "^"
-
-literal = integer | "true" | "false" | string | "()"
-
-(* Types *)
-type = "Int" | "Bool" | "String" | "UI" | "Unit" | "List", type 
-      | "Behaviour", type | "Event", type | type "->" type | "(" type ")"
-
-(* Identifiers and Primitive Values *)
-identifier = ? [a-zA-Z0-9]+ ? ;
-
-integer = ? [0-9]+ ? ;
-
-string = '"', { string_char | escape }, '"'  ;
-
-string_char = ? any Unicode character except " and \ ?  ;
-
-escape = "\", ( '"' | "\" | "n" | "t" )  ;
-\end{lstlisting}
-
-\medskip
-\noindent The langage includes identifiers for functions that produce UI elements and combinators for treating signal types. We list these below with their type.
-
-\begin{center}
-  \begin{tabular}{c | c}
-    Name & Type\\
-    \hline
-    \texttt{show} & \texttt{Int -> String}\\
-    \hline
-    \texttt{text} & \texttt{String -> UI}\\
-    \hline
-    \texttt{button} & \texttt{String -> Event Unit -> UI}\\
-    \hline
-    \texttt{column}, \texttt{row} & \texttt{List UI -> UI}\\
-    \hline
-    \texttt{dyn} & \texttt{Behaviour UI -> UI}\\
-    \hline
-    \texttt{map} & \texttt{('a -> 'b) -> Behaviour 'a -> Behaviour 'b}\\
-    \hline
-    \texttt{map2} & \texttt{('a -> 'b -> 'c) -> Behaviour 'a -> Behaviour 'b -> Behaviour 'c}\\
-    \hline
-    \texttt{mapE} & \texttt{('a -> 'b) -> Event 'a -> Event 'b}\\
-    \hline
-    \texttt{filterE} & \texttt{('a -> Bool) -> Event 'a -> Event 'a}\\
-    \hline
-    \texttt{mergeWith} & \texttt{('a -> 'a -> 'a) -> Event 'a -> Event 'a -> Event 'a}\\
-    \hline
-    \texttt{fold} & \texttt{'b -> ('b -> 'a -> 'b) -> Event 'a -> Behaviour 'b}\\
-    \hline
-    \texttt{hold} & \texttt{'a -> Event 'a -> Behaviour 'a}\\
-    \hline
-    \texttt{snapshot} & \texttt{('a -> 'b -> 'c) -> Event 'a -> Behaviour 'b -> Event 'c}\\
-\end{tabular}
-\end{center}
-
-The meta-variables \texttt{'a} are used as a placeholder to iterate over all possible types. In the langauge there is no polymorphism.
+\noindent Our repository for development can be found on \href{https://github.com/LGabAnnell/cs-462-project}{Github}
 
 \section{Semantics}
 The language's behaviour can be divided into distinct layers, which we'll describe using different semantics that share domains and functions listed below:
@@ -126,16 +62,18 @@ The language's behaviour can be divided into distinct layers, which we'll descri
   \Sigma & \subset \mathit{Loc} &&\\
 o &\in \mathit{Occ} ::= \none \mid \some{v} && \text{contents of an event node}\\
 k &\in \mathit{Kind} && \text{node kinds, see below}\\
-S &: \mathit{Loc} \rightharpoonup (\mathit{Val} \cup \mathit{Occ} \cup \{\bot\}) \times \mathit{Kind} \times 2^{\mathit{Loc}} && \text{store: (contents, kind, dependents)}\\
+S &: \mathit{Loc} \rightharpoonup (\mathit{Val} \cup \mathit{Occ} \cup \bot) \times \mathit{Kind} \times 2^{\mathit{Loc}} && \text{store: (contents, kind, dependents)}\\
 I &\subseteq \mathit{Loc} && \text{dirty set: nodes waiting to be recomputed}\\
-\varepsilon(t) &: \mathit{Loc} \rightharpoonup \mathit{Val} && \text{occurrences fired by the environment at tick } t
+\varepsilon_t &: \mathit{Loc} \rightharpoonup \mathit{Val} && \text{occurrences fired by the environment at tick } t
 \end{align*}
+Note that store locations are generated solely by the language when first constructing the graph and they are not part of the syntax. The domain $ \varepsilon $ is the only one that interfaces with the environment, and it serves as a buffer for events fired while the graph is being recomputed.
+
 Graph node kinds fall into two classes, which matches the \texttt{Behaviour}/\texttt{Event} split of the type system:
 \begin{align*}
 \text{behaviour kinds:}\quad & (\kw{map}\ f\ \sigma) \mid (\kw{map2}\ f\ \sigma\ \sigma) \mid (\kw{fold}\ f\ \sigma) \mid (\kw{hold}\ \sigma)\\
 \text{event kinds:}\quad & (\kw{src}\ x) \mid (\kw{mapE}\ f\ \sigma) \mid (\kw{filterE}\ f\ \sigma) \mid (\kw{mergeWith}\ f\ \sigma\ \sigma) \mid (\kw{snapshot}\ f\ \sigma\ \sigma)
 \end{align*}
-where the $\sigma$'s are the parents of the node. A behaviour node stores a plain value that persists from tick to tick, while an event node stores an occurrence that is only meaningful for the current tick. The name $x$ of a source is the name declared by \texttt{event x : T}, and is used by the CLI and by \texttt{button}.
+where the $\sigma$'s are the parents of the node. A behaviour node stores a plain value that persists from tick to tick, while an event node stores an occurrence that is only meaningful for the current tick. In the paper \cite{10.1007/11693024_20} the behaviour nodes are called \textit{signals}, and functions that take reactive values are implicitly lifted; this is in contrast to our language where the possible operations that depend on and/or return reactive values are explicit. The name $x$ of a source is the name declared by \texttt{event x : T}, and is used by the CLI and by \texttt{button}. 
 
 \paragraph{Useful functions.}
 \begin{align*}
@@ -147,8 +85,14 @@ D_S(P) &= \textstyle\bigcup_{\sigma' \in P} \Sigma' \quad\text{where } S(\sigma'
 A_{\mathrm{b}}(\Sigma,c_0,c) &= \begin{cases}\Sigma & c \neq c_0\\ \emptyset & \text{otherwise}\end{cases} && \text{behaviours: propagate on change}\\
 A_{\mathrm{e}}(\Sigma,o) &= \begin{cases}\Sigma & o = \some{\_}\\ \emptyset & o = \none\end{cases} && \text{events: propagate on presence}\\
 \mathrm{clear}(S) &= S[\sigma \leftarrow \none]\ \ \forall \sigma \text{ with an event kind} && \text{forget last tick's occurrences}\\
-\mathrm{inject}(S,\varepsilon_t) &= S[\sigma \leftarrow \some{v}]\ \ \forall (\sigma,v) \in \varepsilon_t && \text{insert the environment's occurrences}\\
-\mathrm{merge}(f,o_1,o_2) &= \begin{cases}\some{v} & o_1 = \some{a},\ o_2 = \some{b},\ f\ a\ b \cstar v\\ \some{a} & o_1 = \some{a},\ o_2 = \none\\ \some{b} & o_1 = \none,\ o_2 = \some{b}\\ \none & o_1 = o_2 = \none\end{cases}
+\mathrm{inject}(S,\varepsilon_t) &= S[\sigma \leftarrow \some{v}]\ \ \forall (\sigma,v) \in \varepsilon_t && \text{insert the environment's occurrences}
+\end{align*}
+\medskip
+Some helper functions for managing event nodes:
+\begin{align*}
+\mathrm{merge}(f,o_1,o_2) &= \begin{cases}\some{v} & o_1 = \some{a},\ o_2 = \some{b},\ f\ a\ b \cstar v\\ \some{a} & o_1 = \some{a},\ o_2 = \none\\ \some{b} & o_1 = \none,\ o_2 = \some{b}\\ \none & o_1 = o_2 = \none\end{cases}\\
+\mathrm{filter}(b,v) &= \begin{cases}\some{v} & b = \kw{true}\\ \none & b = \kw{false}\end{cases}\\
+\mathrm{snapshot}(f,o,c) &= \begin{cases}\some{v} & o = \some{a},\ f\ a\ c \cstar v\\ \none & o = \none\end{cases}
 \end{align*}
 
 \subsection{Core $ \lambda $-calculus}
@@ -159,7 +103,7 @@ The core of the language can be easily translated to an applied $ \lambda $-calc
 Here $\oplus$ ranges over \texttt{binop} and $b$ over the built-ins, the latter are split into two groups:
 \begin{itemize}
   \item the \emph{pure} ones, $\kw{show}$, $\kw{text}$, $\kw{button}$, $\kw{column}$, $\kw{row}$ and $\kw{dyn}$, handled by $\delta$ below;
-  \item the \emph{reactive} ones, $\kw{map}$, $\kw{map2}$, $\kw{mapE}$, $\kw{filterE}$, $\kw{mergeWith}$, $\kw{fold}$, $\kw{hold}$ and $\kw{snapshot}$, together with $\kw{source}_x$, handled by the graph construction rules.
+  \item the \emph{reactive} ones, $\kw{map}$, $\kw{map2}$, $\kw{mapE}$, $\kw{filterE}$, $\kw{mergeWith}$, $\kw{fold}$, $\kw{hold}$ and $\kw{snapshot}$, handled by the graph construction rules.
 \end{itemize}
 \begin{align*}
 v &::= n \mid \kw{true} \mid \kw{false} \mid s \mid () \mid [v;\dots;v] \mid u \mid \sigma \mid \lambda(x{:}T).\,e\\
@@ -225,18 +169,18 @@ These rules describe how the store evolves in response to external events. A ste
 \textsc{U-Hold-Idle} is the analogue of \textsc{U-Fold-Idle}: if the parent has no occurrence, $\sigma$ is simply removed from $I$ and keeps its value.
 
 \paragraph{Event nodes.}
-\rul{(U-MapE)}{\fire \qquad S(\sigma) = (\_,(\kw{mapE}\ f\ \sigma_1),\Sigma) \\ V_S(\sigma_1) = \some{v} \qquad f\ v \cstar v' \qquad o = \some{v'}}
+\rul{(U-MapE)}{\fire \quad S(\sigma) = (\_,(\kw{mapE}\ f\ \sigma_1),\Sigma) \quad V_S(\sigma_1) = \some{v} \quad f\ v \cstar v' \quad o = \some{v'}}
 {\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
-\rul{(U-FilterE)}{\fire \qquad S(\sigma) = (\_,(\kw{filterE}\ f\ \sigma_1),\Sigma) \\ V_S(\sigma_1) = \some{v} \qquad f\ v \cstar b \\ o = \begin{cases}\some{v} & b = \kw{true}\\ \none & b = \kw{false}\end{cases}}
+\rul{(U-FilterE)}{\fire \quad S(\sigma) = (\_,(\kw{filterE}\ f\ \sigma_1),\Sigma) \quad V_S(\sigma_1) = \some{v} \quad f\ v \cstar b \quad o = \mathrm{filter}(b,v)}
 {\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
-\rul{(U-Merge)}{\fire \qquad S(\sigma) = (\_,(\kw{mergeWith}\ f\ \sigma_1\ \sigma_2),\Sigma) \\ o = \mathrm{merge}(f,V_S(\sigma_1),V_S(\sigma_2))}
+\rul{(U-Merge)}{\fire \quad S(\sigma) = (\_,(\kw{mergeWith}\ f\ \sigma_1\ \sigma_2),\Sigma) \quad o = \mathrm{merge}(f,V_S(\sigma_1),V_S(\sigma_2))}
 {\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
-\rul{(U-Snapshot)}{\fire \qquad S(\sigma) = (\_,(\kw{snapshot}\ f\ \sigma_e\ \sigma_b),\Sigma) \\ o = \begin{cases}\some{v} & V_S(\sigma_e) = \some{a},\ f\ a\ V_S(\sigma_b) \cstar v\\ \none & \text{otherwise}\end{cases}}
+\rul{(U-Snapshot)}{\fire \quad S(\sigma) = (\_,(\kw{snapshot}\ f\ \sigma_e\ \sigma_b),\Sigma) \quad o = \mathrm{snapshot}(f,V_S(\sigma_e),V_S(\sigma_b))}
 {\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow o]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{e}}(\Sigma,o)}{t}}
 \textsc{Snapshot} is registered on both parents so that the behaviour is up to date when the event is processed, but only an occurrence of the event produces an output: a tick in which only the behaviour changed yields $\none$.
 
-\paragraph{Time.}
-Time advances only when the system is stable, so when $I = \emptyset$. All events are then reset, the occurrences of the next tick are inserted into their sources, and the direct dependents of those sources become dirty:
+\paragraph{Tick.}
+The buffered events are evaluated only when the system is stable, so when $I = \emptyset$. All events are then reset, the occurrences of the next tick are inserted into their sources, and the direct dependents of those sources become dirty:
 \rul{(U-Tick)}{F = \mathrm{dom}(\varepsilon(t+1)) \qquad S' = \mathrm{inject}(\mathrm{clear}(S),\ \varepsilon(t+1))}
 {\cfg{S}{\emptyset}{t} \ustep \cfg{S'}{D_S(F)}{t+1}}
 
@@ -258,7 +202,7 @@ where $\mathrm{esc}$ escapes the HTML special characters, and the output is inde
   \item \textbf{Desugar} the program into a single expression $e_{\mathit{prog}}$: the declarations become nested \texttt{let}s ending in the \texttt{render} expression, and the event declarations \texttt{event x : T} are collected to create the initial configuration as follows:
 \rul{(Init)}{S_0 = \{\sigma_i \mapsto (\none,(\kw{src}\ x_i),\emptyset)\}_{i=1..n} \qquad \sigma_i \text{ distinct}}
 {\mathrm{start}(e_{\mathit{prog}}) = \cfg{S_0}{\emptyset}{e_{\mathit{prog}}[\sigma_1/x_1]\cdots[\sigma_n/x_n]}}
-  \item \textbf{Construct} the graph: $\cfg{\emptyset}{\emptyset}{e_{\mathit{prog}}} \step^{*} \cfg{S_0}{I_0}{u}$, where $u$ is a UI value. This runs once, and the graph never changes afterwards.
+  \item \textbf{Construct} the graph: $\mathrm{start}(e) \step^{*} \cfg{S_0}{I_0}{u}$, where $u$ is a UI value. This runs once, and the graph never changes afterwards.
   \item \textbf{Initialise}: $\cfg{S_0}{I_0}{0} \ustar \cfg{S_1}{\emptyset}{0}$, using every update rule except \textsc{U-Tick}. Print the frame $h_0 = R(S_1,u)$.
   \item \textbf{For each tick}: parse the next CLI line into $\varepsilon(t+1)$, checking that every name is a declared source, every payload has the declared type, and no source appears twice. Then run
   \[\cfg{S_t}{\emptyset}{t} \ustep \cfg{S'}{I'}{t+1} \ustar \cfg{S_{t+1}}{\emptyset}{t+1}\]
@@ -330,24 +274,17 @@ where the initial context $ \Gamma_0 $ is given by collecting all event declarat
 \[
   \Gamma_0(x_i) = \kw{Event}\ A
 \]
-\section{Reactive semantics and Proofs - TODO}
 
-Relevant papers:  Flapjax\cite{meyerovich:flapjax} and Embedding Dynamic Dataflow in a Call-by-Value Language\cite{10.1007/11693024_20}\\
-
-Following the results these papers, our goal is to implement a \textit{push-driven} dataflow evaluation by maintaining a \textit{reactive dependency graph} $ G $ to manage signal propagation from sources to sinks.\\
-
-Initially our sources will only include events input manually from a CLI. These will be parsed by the OCaml interpreter and, if necessary, a new block of HTML will be output.\\
-
-\subsection{Proofs}
-We aim to prove \textbf{Glitch-Freedom}: for any topologically sorted evaluation of $ G $ we have that $ \forall v \in V $ the node $ v $ is evaluated at most once. This guarantees that no intermediate inconsistent states are made visible to the user.
+\section{Proofs}
+We aim to prove \textit{Glitch-Freedom}: for any evaluation of $ G $ we have that $ \forall v \in V $ the node $ v $ is evaluated at most once. This guarantees that no intermediate inconsistent states are possible, making it possible to prove more interesting invariants. We will also use the type system to prove type soundness of the graph construction and of every subsequent update, using progress and preservation. For the update rules we will also prove \textit{productivity}, i.e. each step evaluates to a value in finite time.
 
 \section{Project progression}
 
-In this first iteration, we have not achieved much as it fell to the back of the list of things we had to do. We still need to define the sections marked as TODO. A bit more research is needed as well.
+For this second check-in, we have defined the semantics and the type-system of the language. We also have a start of an implementation (lexer, parser and simple evaluator)..
 
 \subsubsection*{Generative AI disclosure}
 
-Generative AI was used for research, \LaTeX \space commands and trying to make sure what is written is sane.
+Generative AI was used for research, some code generation, \LaTeX \space commands and trying to make sure what is written is sane.
 \printbibliography
 
 \end{document}
