@@ -1,0 +1,4 @@
+let price : Int = 12
+let quantity : Int = 3
+let discount : Int = 5
+render [price * quantity - discount; price + quantity * 2; price < quantity]

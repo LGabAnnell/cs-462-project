@@ -1,0 +1,3 @@
+let score = 75
+let result = if score < 50 then "fail" else "pass"
+render [result; score == 75; if false then missing else "safe"]

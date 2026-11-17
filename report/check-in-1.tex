@@ -51,7 +51,7 @@ We propose a language for user interface (UI) generation, meant to be passed to 
 
 \noindent The basis for our semantics come from Embedding Dynamic Dataflow in a Call-by-Value Language\cite{10.1007/11693024_20}, from which we took the graph evaluation model. However, this is not a direct implementation, as we specialized the theory of \textit{functional reactive programming} (FRP) for the domain of UIs with the addition of a type system and formal proofs not present in the original paper.
 
-Our repository for development can be found on \href{https://github.com/LGabAnnell/cs-462-project}{Github}
+\noindent Our repository for development can be found on \href{https://github.com/LGabAnnell/cs-462-project}{Github}
 
 \section{Semantics}
 The language's behaviour can be divided into distinct layers, which we'll describe using different semantics that share domains and functions listed below:
@@ -277,6 +277,10 @@ where the initial context $ \Gamma_0 $ is given by collecting all event declarat
 
 \section{Proofs}
 We aim to prove \textit{Glitch-Freedom}: for any evaluation of $ G $ we have that $ \forall v \in V $ the node $ v $ is evaluated at most once. This guarantees that no intermediate inconsistent states are possible, making it possible to prove more interesting invariants. We will also use the type system to prove type soundness of the graph construction and of every subsequent update, using progress and preservation. For the update rules we will also prove \textit{productivity}, i.e. each step evaluates to a value in finite time.
+
+\section{Project progression}
+
+For this second check-in, we have defined the semantics and the type-system of the language. We also have a start of an implementation (lexer, parser and simple evaluator)..
 
 \subsubsection*{Generative AI disclosure}
 

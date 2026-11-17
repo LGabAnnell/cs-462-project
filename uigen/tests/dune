@@ -12,5 +12,5 @@
 
 (rule
  (alias runtest)
- (deps cli_test.sh)
+ (deps cli_test.sh (glob_files programs/*.ui))
  (action (run bash %{dep:cli_test.sh} %{exe:../bin/main.exe})))
