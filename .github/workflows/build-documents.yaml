@@ -26,7 +26,7 @@ jobs:
       - name: Compile LaTeX
         uses: xu-cheng/latex-action@v4
         with:
-          root_file: report/check-in-1.pdf
+          root_file: report/check-in-1.tex
           work_in_root_file_dir: true
 
       - name: Upload check-in-1
