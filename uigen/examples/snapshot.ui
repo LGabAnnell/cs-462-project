@@ -1,0 +1,9 @@
+event reading : Int
+event capture : Unit
+let current = hold 0 reading
+let sample = fn (u : Unit) -> fn (n : Int) -> n
+let captured = snapshot sample capture current
+let saved = hold 0 captured
+let label = fn (n : Int) -> text let s = show n in s
+let display = map label saved
+render column [button "Capture" capture; dyn display]

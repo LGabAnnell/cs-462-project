@@ -1,0 +1,12 @@
+event increment : Unit
+event decrement : Unit
+let up = fn (u : Unit) -> 1
+let down = fn (u : Unit) -> 0 - 1
+let add = fn (a : Int) -> fn (b : Int) -> a + b
+let plus = mapE up increment
+let minus = mapE down decrement
+let changes = mergeWith add plus minus
+let count = fold 0 add changes
+let label = fn (n : Int) -> text let s = show n in s
+let display = map label count
+render column [row [button "+" increment; button "-" decrement]; dyn display]
