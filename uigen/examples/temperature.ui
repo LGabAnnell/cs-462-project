@@ -1,0 +1,9 @@
+event reading : Int
+let isValid = fn (n : Int) -> 0 - 50 < n
+let valid = filterE isValid reading
+let current = hold 20 valid
+let scale = fn (n : Int) -> n * 9 + 160
+let fahrenheit = map scale current
+let label = fn (c : Int) -> fn (f : Int) -> text let cs = show c in let fs = show f in cs ^ " C, 5 x F: " ^ fs
+let display = map2 label current fahrenheit
+render column [text "Temperature"; dyn display]

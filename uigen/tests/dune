@@ -14,3 +14,8 @@
  (alias runtest)
  (deps cli_test.sh (glob_files programs/*.ui))
  (action (run bash %{dep:cli_test.sh} %{exe:../bin/main.exe})))
+
+(test
+ (name construct_test)
+ (modules construct_test)
+ (libraries uigen))

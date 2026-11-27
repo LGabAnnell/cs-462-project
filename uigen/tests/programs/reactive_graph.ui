@@ -1,0 +1,7 @@
+event click : Unit
+render let one = fn (x : Unit) -> 1 in
+  let increments = mapE one click in
+  let count = hold 0 increments in
+  let makeText = fn (n : Int) -> let s = show n in text s in
+  let display = map makeText count in
+  column [button "Click" click; dyn display]
