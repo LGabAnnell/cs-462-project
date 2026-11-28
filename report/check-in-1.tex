@@ -73,7 +73,7 @@ Graph node kinds fall into two classes, which matches the \texttt{Behaviour}/\te
 \text{behaviour kinds:}\quad & (\kw{map}\ f\ \sigma) \mid (\kw{map2}\ f\ \sigma\ \sigma) \mid (\kw{fold}\ f\ \sigma) \mid (\kw{hold}\ \sigma)\\
 \text{event kinds:}\quad & (\kw{src}\ x) \mid (\kw{mapE}\ f\ \sigma) \mid (\kw{filterE}\ f\ \sigma) \mid (\kw{mergeWith}\ f\ \sigma\ \sigma) \mid (\kw{snapshot}\ f\ \sigma\ \sigma)
 \end{align*}
-where the $\sigma$'s are the parents of the node. A behaviour node stores a plain value that persists from tick to tick, while an event node stores an occurrence that is only meaningful for the current tick. In the paper \cite{10.1007/11693024_20} the behaviour nodes are called \textit{signals}, and functions that take reactive values are implicitly lifted; this is in contrast to our language where the possible operations that depend on and/or return reactive values are explicit. The name $x$ of a source is the name declared by \texttt{event x : T}, and is used by the CLI and by \texttt{button}. 
+where the $\sigma$'s are the parents of the node. A behaviour node stores a plain value that persists from tick to tick, while an event node stores an occurrence that is only meaningful for the current tick. In the paper \cite{10.1007/11693024_20} the behaviour nodes are called \textit{signals}, and functions that take reactive values are implicitly lifted; this is in contrast to our language where the possible operations that depend on and/or return reactive values are explicit. The name $x$ of a source is the name declared by \texttt{event x : D}, and is used by the CLI and by \texttt{button}. 
 
 \paragraph{Useful functions.}
 \begin{align*}
@@ -82,11 +82,15 @@ S[\sigma \leftarrow c] &= S[\sigma \mapsto (c,k,\Sigma)] \quad\text{where } S(\s
 \mathrm{reg}(\sigma,P,S) &= S[\sigma' \mapsto (c,k,\Sigma' \cup \{\sigma\})]\ \ \forall \sigma' \in P \mid S(\sigma') = (c,k,\Sigma') && \text{register $\sigma$ as dependent of $P$}\\
 D_S(P) &= \textstyle\bigcup_{\sigma' \in P} \Sigma' \quad\text{where } S(\sigma') = (\_,\_,\Sigma') && \text{direct dependents}\\
 \dfrd_S(I) &= D_S^{+}(I) && \text{nodes downstream of a dirty node}\\
-A_{\mathrm{b}}(\Sigma,c_0,c) &= \begin{cases}\Sigma & c \neq c_0\\ \emptyset & \text{otherwise}\end{cases} && \text{behaviours: propagate on change}\\
+  A_{\mathrm{b}}(\Sigma,c_0,c) &= \begin{cases}\Sigma & c_0 \not\doteq c\\ \emptyset & c_0 \doteq c\end{cases} && \text{behaviours: propagate on change}\\
 A_{\mathrm{e}}(\Sigma,o) &= \begin{cases}\Sigma & o = \some{\_}\\ \emptyset & o = \none\end{cases} && \text{events: propagate on presence}\\
 \mathrm{clear}(S) &= S[\sigma \leftarrow \none]\ \ \forall \sigma \text{ with an event kind} && \text{forget last tick's occurrences}\\
 \mathrm{inject}(S,\varepsilon_t) &= S[\sigma \leftarrow \some{v}]\ \ \forall (\sigma,v) \in \varepsilon_t && \text{insert the environment's occurrences}
 \end{align*}
+
+\medskip
+\noindent\textbf{Change test.} Write $c_0 \doteq c$ (``unchanged'') when $c_0 \neq \bot$ and $c_0$ and $c$ are structurally identical values that contain no $\lambda$, comparing locations $\sigma$ by identity. In particular a node still at $\bot$ always propagates, and any value containing a function counts as changed. Since every function is pure, extra propagation never changes the stabilised store or any frame, so any relation contained in semantic equality is admissible here. The language's own \texttt{==} (\textsc{T-Eq}) is separate: it only covers \texttt{Int}, \texttt{Bool} and \texttt{String}.
+
 \medskip
 Some helper functions for managing event nodes:
 \begin{align*}
@@ -95,34 +99,48 @@ Some helper functions for managing event nodes:
 \mathrm{snapshot}(f,o,c) &= \begin{cases}\some{v} & o = \some{a},\ f\ a\ c \cstar v\\ \none & o = \none\end{cases}
 \end{align*}
 
-\subsection{Core $ \lambda $-calculus}
+\subsection{Core $ \lambda $-calculus}\label{sec:core}
 The core of the language can be easily translated to an applied $ \lambda $-calculus with \texttt{if}, \texttt{let}, pure built-ins and lists of expressions. We define a small-step CBV operational semantics for this subset.
 
 
 \paragraph{Values, expressions and evaluation contexts.}
 Here $\oplus$ ranges over \texttt{binop} and $b$ over the built-ins, the latter are split into two groups:
 \begin{itemize}
-  \item the \emph{pure} ones, $\kw{show}$, $\kw{text}$, $\kw{button}$, $\kw{column}$, $\kw{row}$ and $\kw{dyn}$, handled by $\delta$ below;
-  \item the \emph{reactive} ones, $\kw{map}$, $\kw{map2}$, $\kw{mapE}$, $\kw{filterE}$, $\kw{mergeWith}$, $\kw{fold}$, $\kw{hold}$ and $\kw{snapshot}$, handled by the graph construction rules.
+  \item the \emph{pure} ones (handled by $\delta$ below): 
+    \[
+    b_{\mathrm{pure}} \in \{\kw{show}/1, \kw{text}/1, \kw{button}/2, \kw{column}/1, \kw{row}/1, \kw{dyn}/1\}
+    \]
+  \item the \emph{reactive} ones (handled by the graph construction rules):
+    \[
+      b_{\mathrm{react}} \in \{\kw{map}/2, \kw{map2}/3, \kw{mapE}/2, \kw{filterE}/2, \kw{mergeWith}/3, \kw{fold}/3, \kw{hold}/2, \kw{snapshot}/3\}
+    \]
 \end{itemize}
+Note that built-ins are not values. The names are reserved words. Each has a fixed arity and may occur only as the head of an application with exactly that many arguments. A reserved word cannot be bound by $\kw{let}$, $\lambda$ or $\kw{event}$, and an unapplied or partially applied built-in is a syntax error. In particular a built-in cannot be passed as an argument: one writes $\kw{map}\ (\lambda(x{:}\kw{Int}).\,\kw{show}\ x)\ n$, not $\kw{map}\ \kw{show}\ n$.
+
+\paragraph{Node-free expressions.} The body of a $\lambda$ is a \emph{node-free} expression $p$: it contains no application of a reactive built-in, at any depth, including inside nested $\lambda$s. It may still mention event and behaviour variables, which it can pass to $\kw{button}$ and $\kw{dyn}$, but it can neither create graph nodes nor inspect the contents of an event or behaviour.
 \begin{align*}
-v &::= n \mid \kw{true} \mid \kw{false} \mid s \mid () \mid [v;\dots;v] \mid u \mid \sigma \mid \lambda(x{:}T).\,e\\
+p &::= v \mid x \mid p\ p \mid \kw{if}\ p\ \kw{then}\ p\ \kw{else}\ p \mid \kw{let}\ x = p\ \kw{in}\ p \mid \kw{let}\ x{:}T = p\ \kw{in}\ p \mid p \oplus p \mid [p;\dots;p] \mid b_{\mathrm{pure}}\ p\cdots p\\
+v &::= n \mid \kw{true} \mid \kw{false} \mid s \mid () \mid [v;\dots;v] \mid u \mid \sigma \mid \lambda(x{:}T).p\\
 u &::= \kw{text}\ s \mid \kw{button}\ s\ \sigma \mid \kw{column}\ [u;\dots;u] \mid \kw{row}\ [u;\dots;u] \mid \kw{dyn}\ \sigma\\
-e &::= v \mid x \mid e\ e \mid \kw{if}\ e\ \kw{then}\ e\ \kw{else}\ e \mid \kw{let}\ x = e\ \kw{in}\ e \mid e \oplus e \mid [e;\dots;e] \mid b\ e\cdots e\\
+e &::= p \mid e\ e \mid \kw{if}\ e\ \kw{then}\ e\ \kw{else}\ e \mid \kw{let}\ x = e\ \kw{in}\ e\\
+  &\phantom{::=}\ \mid \kw{let}\ x{:}T = e\ \kw{in}\ e \mid e \oplus e \mid [e;\dots;e] \mid b_{\mathrm{pure}}\ e\cdots e \mid b_{\mathrm{react}}\ e\cdots e\\
 E &::= [\,] \mid E\ e \mid v\ E \mid \kw{if}\ E\ \kw{then}\ e\ \kw{else}\ e \mid \kw{let}\ x = E\ \kw{in}\ e \mid E \oplus e \mid v \oplus E\\
   &\phantom{::=}\ \mid [v;\dots;v;E;e;\dots;e] \mid b\ v\cdots v\ E\ e\cdots e
 \end{align*}
+
+Note that $ p \subseteq e $ and $ v \subseteq p $.
 
 \paragraph{Core reduction.} The following rules relate expressions, $e \cstep e'$:
 \begin{align*}
 (\lambda(x{:}T).\,e)\ v &\cstep e[v/x] & &\textsc{($\beta_v$)}\\
 \kw{let}\ x = v\ \kw{in}\ e &\cstep e[v/x] & &\textsc{(Let)}\\
+\kw{let}\ x{:}T = v\ \kw{in}\ e &\cstep e[v/x] & &\textsc{(Let-Ann)}\\
 \kw{if}\ \kw{true}\ \kw{then}\ e_1\ \kw{else}\ e_2 &\cstep e_1 & &\textsc{(If-T)}\\
 \kw{if}\ \kw{false}\ \kw{then}\ e_1\ \kw{else}\ e_2 &\cstep e_2 & &\textsc{(If-F)}\\
 v_1 \oplus v_2 &\cstep \delta(\oplus, v_1, v_2) & &\textsc{($\delta$-op)}\\
 b\ v_1\cdots v_n &\cstep \delta(b, v_1,\dots,v_n) \quad (b \text{ pure}) & &\textsc{($\delta$-prim)}
 \end{align*}
-where $\delta$ is the usual interpretation of the arithmetic, comparison and string operators and of the pure built-ins ($\delta(\kw{show},n)$ is the decimal string of $n$, $\delta(\kw{text},s) = \kw{text}\ s$, and so on). A core step can happen anywhere in an evaluation position, while the rest of the configuration is left untouched:
+where $\delta$ is the usual interpretation of the arithmetic, comparison and string operators and of the pure built-ins ($\delta(\kw{show},n)$ is the decimal string of $n$, $\delta(\kw{text},s) = \kw{text}\ s$, and so on). $\kw{Int}$ is the set of integers in $[-2^{62},\,2^{62}-1]$, and $+$, $-$ and $*$ wrap modulo $2^{63}$. Integer literals outside this range are rejected by the lexer, and $\delta(\kw{show},n)$ begins with \texttt{-} when $n$ is negative. A core step can happen anywhere in an evaluation position, while the rest of the configuration is left untouched:
 \rul{(Ctx)}{e \cstep e'}{\cfg{S}{I}{E[e]} \step \cfg{S}{I}{E[e']}}
 We write $\cstar$ for the reflexive transitive closure of $\cstep$.
 
@@ -162,11 +180,8 @@ These rules describe how the store evolves in response to external events. A ste
 {\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow c]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{b}}(\Sigma,c_0,c)}{t}}
 \rul{(U-Fold)}{\fire \qquad S(\sigma) = (a,(\kw{fold}\ f\ \sigma_1),\Sigma) \qquad V_S(\sigma_1) = \some{v} \qquad f\ a\ v \cstar a'}
 {\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow a']}{(I \setminus \{\sigma\}) \cup A_{\mathrm{b}}(\Sigma,a,a')}{t}}
-\rul{(U-Fold-Idle)}{\fire \qquad S(\sigma) = (a,(\kw{fold}\ f\ \sigma_1),\Sigma) \qquad V_S(\sigma_1) = \none}
-{\cfg{S}{I}{t} \ustep \cfg{S}{I \setminus \{\sigma\}}{t}}
 \rul{(U-Hold)}{\fire \qquad S(\sigma) = (a,(\kw{hold}\ \sigma_1),\Sigma) \qquad V_S(\sigma_1) = \some{v}}
 {\cfg{S}{I}{t} \ustep \cfg{S[\sigma \leftarrow v]}{(I \setminus \{\sigma\}) \cup A_{\mathrm{b}}(\Sigma,a,v)}{t}}
-\textsc{U-Hold-Idle} is the analogue of \textsc{U-Fold-Idle}: if the parent has no occurrence, $\sigma$ is simply removed from $I$ and keeps its value.
 
 \paragraph{Event nodes.}
 \rul{(U-MapE)}{\fire \quad S(\sigma) = (\_,(\kw{mapE}\ f\ \sigma_1),\Sigma) \quad V_S(\sigma_1) = \some{v} \quad f\ v \cstar v' \quad o = \some{v'}}
@@ -184,7 +199,7 @@ The buffered events are evaluated only when the system is stable, so when $I = \
 \rul{(U-Tick)}{F = \mathrm{dom}(\varepsilon(t+1)) \qquad S' = \mathrm{inject}(\mathrm{clear}(S),\ \varepsilon(t+1))}
 {\cfg{S}{\emptyset}{t} \ustep \cfg{S'}{D_S(F)}{t+1}}
 
-\subsection{Programs and Rendering}
+\subsection{Programs and Rendering}\label{sec:prog}
 
 A \texttt{program} is simply syntactical sugar that evaluates as nested \texttt{let}s with \texttt{expression} at the end, whose final value is compiled to HTML using the rendering function, defined by recursion as
 
@@ -196,20 +211,40 @@ R(S,\ \kw{column}\ [u_1;\dots;u_n]) &= \texttt{\textless div class="column"\text
 R(S,\ \kw{row}\ [u_1;\dots;u_n]) &= \texttt{\textless div class="row"\textgreater}\\ &\qquad\cat R(S,u_1) \cat \cdots \cat R(S,u_n) \cat \texttt{\textless /div\textgreater}\\
 R(S,\ \kw{dyn}\ \sigma) &= R(S,\ V_S(\sigma))
 \end{align*}
-where $\mathrm{esc}$ escapes the HTML special characters, and the output is indented when printed. The final pipeline describing the run of a program is as follows:
+where $\mathrm{esc}$ escapes the HTML special characters: it maps \texttt{\&} to \texttt{\&amp;}, \texttt{\textless} to \texttt{\&lt;}, \texttt{\textgreater} to \texttt{\&gt;}, \texttt{"} to \texttt{\&quot;}, \texttt{'} to \texttt{\&\#39;}, and newline and carriage return to \texttt{\&\#10;} and \texttt{\&\#13;}. The exact printed form of a frame is given in the paragraph \emph{output format} below.
 
 \begin{enumerate}
-  \item \textbf{Desugar} the program into a single expression $e_{\mathit{prog}}$: the declarations become nested \texttt{let}s ending in the \texttt{render} expression, and the event declarations \texttt{event x : T} are collected to create the initial configuration as follows:
+  \item \textbf{Desugar} the program into a single expression $e_{\mathit{prog}}$: the declarations become nested \texttt{let}s ending in the \texttt{render} expression, and the event declarations \texttt{event x : D}, where $D \in \{\kw{Int},\kw{Bool},\kw{String},\kw{Unit}\}$, are collected to create the initial configuration as follows:
 \rul{(Init)}{S_0 = \{\sigma_i \mapsto (\none,(\kw{src}\ x_i),\emptyset)\}_{i=1..n} \qquad \sigma_i \text{ distinct}}
 {\mathrm{start}(e_{\mathit{prog}}) = \cfg{S_0}{\emptyset}{e_{\mathit{prog}}[\sigma_1/x_1]\cdots[\sigma_n/x_n]}}
-  \item \textbf{Construct} the graph: $\mathrm{start}(e) \step^{*} \cfg{S_0}{I_0}{u}$, where $u$ is a UI value. This runs once, and the graph never changes afterwards.
-  \item \textbf{Initialise}: $\cfg{S_0}{I_0}{0} \ustar \cfg{S_1}{\emptyset}{0}$, using every update rule except \textsc{U-Tick}. Print the frame $h_0 = R(S_1,u)$.
-  \item \textbf{For each tick}: parse the next CLI line into $\varepsilon(t+1)$, checking that every name is a declared source, every payload has the declared type, and no source appears twice. Then run
+  \item \textbf{Construct} the graph: $\mathrm{start}(e_{\mathit{prog}}) \step^{*} \cfg{S_c}{I_0}{u}$, where $u$ is a UI value and $S_c$ is the store after construction ($S_0$ extended with the allocated nodes). This runs once, and the graph never changes afterwards.
+  \item \textbf{Initialise}: $\cfg{S_c}{I_0}{0} \ustar \cfg{S_1}{\emptyset}{0}$, using every update rule except \textsc{U-Tick}. Print the frame $h_0 = R(S_1,u)$, preceded by the line \texttt{\textless!-- tick 0 --\textgreater}.
+  \item \textbf{For each tick}: parse the next CLI line into $\varepsilon(t+1)$, checking that every name is a declared source, every payload has the declared type, and no source appears twice (the line format is given below; a blank line gives $\varepsilon(t+1) = \emptyset$, an idle tick). Then run
   \[\cfg{S_t}{\emptyset}{t} \ustep \cfg{S'}{I'}{t+1} \ustar \cfg{S_{t+1}}{\emptyset}{t+1}\]
-  and compute $h_{t+1} = R(S_{t+1},u)$. Print it only if $h_{t+1} \neq h_t$.
-  \item \textbf{Repeat} until the end of the input. A malformed line is reported on standard error and leaves the state unchanged.
+    and compute $h_{t+1} = R(S_{t+1},u)$. Print it, preceded by the line \texttt{\textless!-- tick t+1 --\textgreater}, only if $h_{t+1} \neq h_t$.
+  \item \textbf{Repeat} until the end of the input. A malformed line is reported on standard error and leaves the state and $ t $ unchanged.
 \end{enumerate}
 The same $u$ is used for every frame: only the contents of the store change, and $\kw{dyn}$ nodes are the only places where the rendered text depends on them.
+
+\paragraph{Well-formed source programs.} Event names are global and unique. Each declaration \texttt{event x : D} must precede every use of the name $x$, and declaring a name twice, rebinding it with $\kw{let}$ or $\lambda$, or using it before its declaration is a syntax error. Hence the $\sigma_i$ and the $x_i$ of (Init) are in bijection. Payload types are restricted to $D \in \{\kw{Int},\kw{Bool},\kw{String},\kw{Unit}\}$, and $\Gamma_0$ is restricted accordingly. In $\kw{button}\ e_1\ e_2$ the second argument must be the name $x$ of a declared event \texttt{event x : Unit}; aliases such as \texttt{let b = click in button "x" b} are rejected. Hence after (Init) every $\kw{button}$ refers to a source node, and $R(S,\ \kw{button}\ s\ \sigma)$ is always defined.
+
+\paragraph{Input and output streams.} The program is read from the file given as argument, and event lines are read from standard input until end of input. If no file is given, the program is read from standard input instead, and the run ends after printing $h_0$ (static rendering). A program that declares no events rejects every non-blank input line as an unknown name.
+
+\paragraph{Event lines.} A line is a sequence of items separated by spaces, each of the form \texttt{x=lit}, where $x$ is a declared event name and \texttt{lit} is a literal of its declared type, written as in the language (\texttt{-3}, \texttt{true}, \texttt{"two words"}, \texttt{()}). For a $\kw{Unit}$ event, \texttt{=()} may be omitted, so a button click is just its name. The items on one line are the occurrences $\varepsilon(t+1)$ of a single tick, and a name may appear at most once. A blank line is an idle tick ($\varepsilon(t+1) = \emptyset$) and prints nothing. A line that fails any check (unknown name, wrong payload type, duplicate name, malformed literal, missing payload) is reported on standard error, is not a tick, and leaves the state and $t$ unchanged. For example \texttt{inc} and \texttt{name="Ada Lovelace" n=-3} are valid lines for suitable declarations. Only $\kw{Unit}$ events can be fired from the HTML (by buttons); events with other payload types are command-line only.
+
+\paragraph{Output format.} A frame is printed as the line \texttt{\textless!-- tick N --\textgreater}, where \texttt{N} is the tick that produced it (0 for the initial frame), followed by the HTML indented by two spaces per nesting level. Each \texttt{span} or \texttt{button} is on one line, each $\kw{column}$ or $\kw{row}$ has its tags on separate lines (or on one line if it is empty), and $\kw{dyn}$ adds neither an element nor indentation. Frames that are not printed because $h_{t+1} = h_t$ leave gaps in \texttt{N}. The header line cannot occur inside a frame, because $<$ is always escaped. Frames are compared on the unindented string $R(S,u)$, and printing is a deterministic function of it. Frames go to standard output, errors to standard error, and output is flushed after each frame. For example:
+\begin{verbatim}
+<!-- tick 0 -->
+<div class="column">
+  <span>Count: 0</span>
+  <button data-on="inc">+</button>
+</div>
+<!-- tick 1 -->
+<div class="column">
+  <span>Count: 1</span>
+  <button data-on="inc">+</button>
+</div>
+\end{verbatim}
 
 \section{Type system}
 
@@ -221,7 +256,7 @@ For a source program $\Sigma = \emptyset$, so a location $\sigma$ appearing in t
 $\Sigma$ is only needed for the preservation proof.
 
 \paragraph{Types.} The metavariables $A, B, C$ range over \emph{plain} types, which cannot contain
-$\kw{Behaviour}$ or $\kw{Event}$. This guarantees that a function never allocates graph nodes while a tick is running.
+$\kw{Behaviour}$ or $\kw{Event}$. This stop events and behaviours from being passed to, returned by, or stored in functions and lists. Together with the node-free restriction on $\lambda$-bodies (Section~\ref{sec:core}), this guarantees that a function never allocates graph nodes while a tick is running.
 \begin{align*}
 A, B, C &::= \kw{Int} \mid \kw{Bool} \mid \kw{String} \mid \kw{Unit} \mid \kw{UI} \mid \kw{List}\ A \mid A \to B\\
 \tau &::= A \mid \kw{Behaviour}\ A \mid \kw{Event}\ A
@@ -236,6 +271,8 @@ A, B, C &::= \kw{Int} \mid \kw{Bool} \mid \kw{String} \mid \kw{Unit} \mid \kw{UI
 \rul{(T-Lam)}{\Sigma;\Gamma, x{:}A \vdash e : B}{\tj \lambda(x{:}A).\,e : A \to B}
 \rul{(T-App)}{\tj e_1 : A \to B \qquad \tj e_2 : A}{\tj e_1\ e_2 : B}
 \rul{(T-Let)}{\tj e_1 : \tau_1 \qquad \Sigma;\Gamma, x{:}\tau_1 \vdash e_2 : \tau_2}{\tj \kw{let}\ x = e_1\ \kw{in}\ e_2 : \tau_2}
+\rul{(T-Let-Ann)}{\tj e_1 : \tau_1 \qquad \Sigma;\Gamma, x{:}\tau_1 \vdash e_2 : \tau_2 \qquad T = \tau_1}
+{\tj \kw{let}\ x{:}T = e_1\ \kw{in}\ e_2 : \tau_2}
 \rul{(T-If)}{\tj e_c : \kw{Bool} \qquad \tj e_1 : \tau \qquad \tj e_2 : \tau}
 {\tj \kw{if}\ e_c\ \kw{then}\ e_1\ \kw{else}\ e_2 : \tau}
 \rul{(T-List)}{\tj e_i : A \quad (1 \le i \le n,\ n \ge 1)}{\tj [e_1;\dots;e_n] : \kw{List}\ A}
@@ -246,11 +283,14 @@ A, B, C &::= \kw{Int} \mid \kw{Bool} \mid \kw{String} \mid \kw{Unit} \mid \kw{UI
 \rul{(T-Eq)}{\tj e_1 : A \qquad \tj e_2 : A \qquad A \in \{\kw{Int},\kw{Bool},\kw{String}\}}{\tj e_1 == e_2 : \kw{Bool}}
 \rul{(T-Cat)}{\tj e_1 : \kw{String} \qquad \tj e_2 : \kw{String}}{\tj e_1 \mathbin{\hat{\ }} e_2 : \kw{String}}
 
+\noindent Built-ins occur only in saturated applications (Section~\ref{sec:core}), so every rule below types an application and never a bare built-in name.
+
 \paragraph{UI built-ins.} The UI values $u$ of the semantic syntax are saturated applications of these
 constructors, so the same rules type them at run time.
 \rul{(T-Show)}{\tj e : \kw{Int}}{\tj \kw{show}\ e : \kw{String}}
 \rul{(T-Text)}{\tj e : \kw{String}}{\tj \kw{text}\ e : \kw{UI}}
 \rul{(T-Button)}{\tj e_1 : \kw{String} \qquad \tj e_2 : \kw{Event}\ \kw{Unit}}{\tj \kw{button}\ e_1\ e_2 : \kw{UI}}
+\noindent In a source program the second argument of $\kw{button}$ must in addition be the name of a declared \texttt{Unit} event, so that rendering is defined (Section~\ref{sec:prog}).
 \rul{(T-Column)}{\tj e : \kw{List}\ \kw{UI}}{\tj \kw{column}\ e : \kw{UI} \qquad \tj \kw{row}\ e : \kw{UI}}
 \rul{(T-Dyn)}{\tj e : \kw{Behaviour}\ \kw{UI}}{\tj \kw{dyn}\ e : \kw{UI}}
 
@@ -270,13 +310,13 @@ constructors, so the same rules type them at run time.
 
 \paragraph{Programs.} A program, desugared to a single expression $e_{\mathit{prog}}$, is well typed when
 \[ \emptyset;\Gamma_0 \vdash e_{\mathit{prog}} : \kw{UI}. \]
-where the initial context $ \Gamma_0 $ is given by collecting all event declarations $ \kw{event}\ x_i : A $ and setting
+where the initial context $ \Gamma_0 $ is given by collecting all event declarations $ \kw{event}\ x_i : D $, with $D \in \{\kw{Int},\kw{Bool},\kw{String},\kw{Unit}\}$, and setting
 \[
   \Gamma_0(x_i) = \kw{Event}\ A
 \]
 
 \section{Proofs}
-We aim to prove \textit{Glitch-Freedom}: for any evaluation of $ G $ we have that $ \forall v \in V $ the node $ v $ is evaluated at most once. This guarantees that no intermediate inconsistent states are possible, making it possible to prove more interesting invariants. We will also use the type system to prove type soundness of the graph construction and of every subsequent update, using progress and preservation. For the update rules we will also prove \textit{productivity}, i.e. each step evaluates to a value in finite time.
+We aim to prove \textit{Glitch-Freedom}: in every stabilisation run, that is $\cfg{S_c}{I_0}{0} \ustar \cfg{S_1}{\emptyset}{0}$ during initialisation and $\cfg{S'}{I'}{t+1} \ustar \cfg{S_{t+1}}{\emptyset}{t+1}$ after each tick, every $\sigma \in \mathrm{dom}(S)$ is recomputed by at most one update step. Consequently a stabilisation run takes at most $|\mathrm{dom}(S)|$ update steps. This guarantees that no intermediate inconsistent states are possible, making it possible to prove more interesting invariants. We will also use the type system to prove type soundness of the graph construction and of every subsequent update, using progress and preservation. For the update rules we will also prove \textit{productivity}, i.e. each step evaluates to a value in finite time.
 
 \section{Project progression}
 
@@ -285,6 +325,7 @@ For this second check-in, we have defined the semantics and the type-system of t
 \subsubsection*{Generative AI disclosure}
 
 Generative AI was used for research, some code generation, \LaTeX \space commands and trying to make sure what is written is sane.
+
 \printbibliography
 
 \end{document}
